@@ -1,0 +1,77 @@
+This file started as hhas' SwiftAutomation to-do list as of early 2019 or so.
+Anything left here is still relevant to deal with.
+
+TO DO:
+
+- AutoReleasePools?
+
+
+- there is a serious bug when comparing Any result to MissingValue:
+
+        print(try Finder().home.name.get() == MissingValue) // returns true!!! (should be false as result is a String value)
+
+- another problem will be when using `==` on a result that may be a specifier, since == constructs a test clause; going to have to give these overloads more thought; at worst, switch to `eq`, `ne`, `lt`, etc, or custom operators which won't clash with builtins
+
+
+- one problem with overriding `==` for use in test clauses is that swiftc is rather dopey about resolving ambiguous overloads; dunno if there's any way to tell it to ignore this override if LHS is not explicitly ObjectSpecifier, e.g.:
+
+    print(("" as Any) == ("" as Any))
+
+    error: cannot convert value of type 'Any' to expected argument type 'ObjectSpecifier'
+    print(("" as Any) == ("" as Any))
+           ~~~^~~~~~
+
+
+- amusing translation error:
+
+        tell application "Keynote"
+          --get font of object text of every text item of master slides of document 1
+          set font of object text of (every text item whose object text's font starts with "IowanOldStyle-") of master slides of document 1 to "Century Schoolbook"
+        end tell
+
+    gives:
+
+        try Keynote(name: "/Applications/Keynote.app").customRoot(Error -1700: Can't decode malformed descriptor:
+
+        <NSAppleEventDescriptor: 'obj '{ 'form':'test', 'want':'shtx', 'from':'obj '{ 'form':'indx', 'want':'KnMs', 'seld':'abso'($206C6C61$), 'from':'obj '{ 'form':'indx', 'want':'docu', 'seld':1, 'from':null() } }, 'seld':'cmpd'{ 'relo':'bgwt', 'obj1':'obj '{ 'form':'prop', 'want':'prop', 'seld':'font', 'from':'obj '{ 'form':'prop', 'want':'prop', 'seld':'pDTx', 'from':'exmn'($$) } }, 'obj2':'utxt'("IowanOldStyle-") } }>
+
+        Can't decode object specifier's selector data. Can't decode malformed descriptor:
+
+        <NSAppleEventDescriptor: 'cmpd'{ 'relo':'bgwt', 'obj1':'obj '{ 'form':'prop', 'want':'prop', 'seld':'font', 'from':'obj '{ 'form':'prop', 'want':'prop', 'seld':'pDTx', 'from':'exmn'($$) } }, 'obj2':'utxt'("IowanOldStyle-") }>
+
+        Can't decode comparison test: malformed descriptor.).objectText.font.set(to: "Century Schoolbook")
+
+    1. SpecifierFormatter.formatValue() needs to check for Error, and show opaque description string (e.g. "«malformed-descriptor»")
+
+    2. The above is due to a bug in the decode code rather than a malformed AEDesc, so need to track down and fix that as well.
+
+
+- Define standard structs for representing color, position, etc.? (And/Or support encoding/decoding Cocoa equivalents, e.g. NSColor?) The default behavior is to encode/decode as Array<Int>, but type-safe alternatives could also be provided that ensure whatever type of descriptor an app returns (typeAEList/typeQDRectangle) the final result is normalized to the semantic type specified by the user (e.g. SwiftAutomation.RectangleRecord). Also, how practical to support encoding/decoding image types (a known mess), e.g. bridging typeTIFF, typePICT, etc to NSImage?
+
+
+- check Symbol.symbol() lookup performance on on very large switches [e.g. InDesign]; if noticeable, a dictionary could be used to cache previous lookups
+
+
+- the `isInt64Compatible` flag's' default is `true` on the assumption that most apps will do the right thing upon receiving `typeUInt32`/`typeSInt64`/`typeUInt64` descriptors (i.e. coerce them to whatever type[s] they actually need, e.g. Double), and apps like Excel which only accept `SInt32` and `Double` (which are what AppleScript uses) and fail on anything else are in the minority. If that assumption turns out to be wrong, this flag will need to be made `false` by default (i.e. emulate AppleScript's behavior). Note that this only affects integers beyond ±2**31; integers than can be packed into SInt32 always will be.
+
+
+- currently Application.customRoot(object) allows the creation of individual object specifiers with a non-typeNull terminator, e.g. `Finder().customRoot(aURL).name` is equivalent to `tell app "Finder" to name of POSIX file "..."`. In practice, this is almost never neeeded (or supported by apps), but it's included for maximum AppleScript 'quirk-for-quirk' compatibility. Should App also provide an option to set the default app root object to be used in building and decoding _all_ object specifiers? The only place this might be useful is in Automator when packing fully qualified object specifiers; OTOH, fully qualified object specifiers always were a bad solution to the problem of binding AEAddressDescs to objspec descriptors, and Automator's a dead-end and largely moribund product anyway.
+
+
+- note that file system specifiers (typeAlias, typeFileURL, typeFSRef, etc) currently don't roundtrip (they all get coerced down to typeFileURL, regardless of their original type, and URL instances always encode as typeFileURL); this may or may not be a problem when dealing with older Carbon apps. One solution may be an `isFileURLCompatible` flag that, if set to false, packs URLs as as typeAlias if the path identifies an existing FS object and typeFileURL if it does not. (Packing as typeFSRef is redundant and typeFSS is defunct, so those should not need supported.) -- TBH, probably best forget about roundtripping these types, encode all file: URLs as typeFileURL, and hope for the best: 1. there's no way to attach their AEDescs to a URL struct, and 2. URL structs don't support isFileReferenceURL so there's no way to tell if they're a bookmark (in which case encode as typeAlias) or a path (encode as typeFileURL)
+
+    - typeBookmark/typeAlias descriptors identify file system *objects* [e.g. by inode], whereas typeFSRef/typeFileURL identify file system locations; however, only NSURL can distinguish the two so for now any Bookmark/Alias information will be lost on conversion to Swift `URL` instances, while `URL` will always encode as typeFileURL. This may change in future depending on how many compatibility issues with older Carbon apps this lack of roundtripping throws up.]
+
+
+- worth including convenience API for interacting with `NSAppleScript`/`NSUserAppleScriptTask`/`OSAScript`? Given that SwiftAutomation provides automatic Swift<->AE type bridging, it seems a pity not to take advantage of it as it'll greatly reduce the amount of effort needed to make Swift apps attachable. Or should that be spun off into its own library to avoid crudding up SwiftAutomation's main API? (Probably the latter, as it allows that code to evolve independently later on. That may be particularly significant if the app also implements its own AEOM which attached scripts will want to interact with; doubly so if Swift ever gets a native AEOM framework [as a non-sucky alternative to CocoaScripting]; triply so if it can get a non-sucky replacement to the awful, archaic, and barely supported/supportable ComponentManager-based OpenScripting [OSA] framework.)
+
+
+- default SendMode is currently [.canSwitchLayer,.waitReply]; confirm this is same as AppleScript
+
+
+- can custom mirrors be improved? what info should they show? (one problem is that playgrounds tend to display array of specifier as mirror, not description/debugDescription, which is unhelpful)
+
+
+- need to check both AETE and SDEF parsers work correctly with apps that have multiple terminologies (e.g. if app also has scriptable plugins)
+
+- also find out if macOS's SDEF-to-AETE converter now handles 'unprintable' OSTypes correctly (i.e. uses hex representation)

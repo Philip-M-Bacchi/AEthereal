@@ -1,0 +1,155 @@
+//  Originally written by hhas.
+//  See README.md for licensing information.
+
+import Foundation
+import AppKit
+
+/******************************************************************************/
+// KLUDGE: NSWorkspace provides a good method for launching apps by file URL, and a crap one for launching by bundle ID - unfortunately, only the latter can be used in sandboxed apps. This extension adds a launchApplication(withBundleIdentifier:options:configuration:)throws->NSRunningApplication method that has a good API and the least compromised behavior, insulating AETarget code from the crappiness that hides within. If/when Apple adds a real, robust version of this method to NSWorkspace <rdar://29159280>, this extension can (and should) go away.
+
+extension NSWorkspace { 
+    
+    // caution: the configuration parameter is ignored in sandboxed apps; this is unavoidable
+    @objc func launchApplication(withBundleIdentifier bundleID: String, options: NSWorkspace.LaunchOptions = [],
+                           configuration: [NSWorkspace.LaunchConfigurationKey : Any]) throws -> NSRunningApplication {
+        // if one or more processes with the given bundle ID is already running, return the first one found
+        let foundProcesses = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if foundProcesses.count > 0 {
+            return foundProcesses[0]
+        }
+        // first try to get the app's file URL, as this lets us use the better launchApplication(at:options:configuration:) method…
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            do {
+                return try NSWorkspace.shared.launchApplication(at: url, options: options, configuration: configuration)
+            } catch {} // for now, we're not sure if urlForApplication(withBundleIdentifier:) will always return nil if blocked by sandbox; if it returns garbage URL instead then hopefully that'll cause launchApplication(at:...) to throw
+        }
+        // …else fall back to the inferior launchApplication(withBundleIdentifier:options:additionalEventParamDescriptor:launchIdentifier:)
+        var options = options
+        options.remove(NSWorkspace.LaunchOptions.async)
+        if NSWorkspace.shared.launchApplication(withBundleIdentifier: bundleID, options: options,
+                                                  additionalEventParamDescriptor: nil, launchIdentifier: nil) {
+            // TO DO: confirm that launchApplication() never returns before process is available (otherwise the following will need to be in a loop that blocks until it is available or the loop times out)
+            let foundProcesses = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            if foundProcesses.count > 0 {
+                return foundProcesses[0]
+            }
+        }
+        throw NSError(domain: NSCocoaErrorDomain, code: 1, userInfo:
+                      [NSLocalizedDescriptionKey: "Can't find/launch application \(bundleID.debugDescription)"]) // TO DO: what error to report here, since launchApplication(withBundleIdentifier:options:additionalEventParamDescriptor:launchIdentifier:) doesn't provide any error info itself?
+    }
+}
+
+/******************************************************************************/
+// logging
+
+struct StderrStream: TextOutputStream {
+    public mutating func write(_ string: String) { fputs(string, stderr) }
+}
+var errStream = StderrStream()
+
+/******************************************************************************/
+// convert between 4-character strings and OSTypes (use these instead of calling UTGetOSTypeFromString/UTCopyStringFromOSType directly)
+
+extension FourCharCode {
+    
+    public init(fourByteString string: String) throws {
+        // convert four-character string containing MacOSRoman characters to OSType
+        // (this is safer than using UTGetOSTypeFromString, which silently fails if string is malformed)
+        guard let data = string.data(using: .macOSRoman) else {
+            throw AutomationError(code: 1, message: "Invalid four-char code (bad encoding): \(string.debugDescription)")
+        }
+        guard data.count == 4 else {
+            throw AutomationError(code: 1, message: "Invalid four-char code (wrong length): \(string.debugDescription)")
+        }
+        let reinterpreted = data.withUnsafeBytes { $0.bindMemory(to: FourCharCode.self).first! }
+        self.init(reinterpreted.bigEndian)
+    }
+    
+}
+
+extension String {
+    
+    public init(fourCharCode: FourCharCode) {
+        // convert an OSType to four-character string containing MacOSRoman characters
+        self.init(UTCreateStringForOSType(fourCharCode).takeRetainedValue() as String)
+    }
+    
+}
+
+public func eightCharCode(_ eventClass: OSType, _ eventID: OSType) -> UInt64 {
+    return UInt64(eventClass) << 32 | UInt64(eventID)
+}
+
+// misc AEDesc packing functions
+
+extension NSAppleEventDescriptor {
+    
+    convenience init(type: OSType, code: OSType) {
+        var data = code
+        self.init(descriptorType: type, bytes: &data, length: MemoryLayout<OSType>.size)!
+    }
+    
+    convenience init(uint32 data: UInt32) {
+        var data = data
+        self.init(descriptorType: AE4.Types.uInt32, bytes: &data, length: MemoryLayout<UInt32>.size)!
+    }
+}
+
+// the following AEDesc types will be mapped to Symbol instances
+let symbolDescriptorTypes: Set<DescType> = [typeType, typeEnumerated, typeProperty, typeKeyword]
+
+/******************************************************************************/
+// consids/ignores options are defined in ASRegistry.h (they're a crappy design and a complete mess, and most apps completely ignore them, but we support them anyway in order to ensure feature parity with AS)
+
+public enum Consideration {
+    case `case`
+    case diacritic
+    case whiteSpace
+    case hyphens
+    case expansion
+    case punctuation
+//  case replies // TO DO: check if this is ever supplied by AS; if it is, might be an idea to add it; if not, delete
+    case numericStrings
+}
+
+public typealias Considerations = Set<Consideration>
+
+public typealias SendOptions = NSAppleEventDescriptor.SendOptions
+
+/******************************************************************************/
+// launch and relaunch options used in Application initializers
+
+public typealias LaunchOptions = NSWorkspace.LaunchOptions
+
+public let DefaultLaunchOptions: LaunchOptions = NSWorkspace.LaunchOptions.withoutActivation
+
+public enum RelaunchMode { // if [local] target process has terminated, relaunch it automatically when sending next command to it
+    case always
+    case limited
+    case never
+}
+
+public let DefaultRelaunchMode: RelaunchMode = .limited
+
+// Indicates omitted command parameter
+
+public enum OptionalParameter {
+    case none
+}
+
+public let NoParameter = OptionalParameter.none
+
+func parameterExists(_ value: Any) -> Bool {
+    return value as? OptionalParameter != NoParameter
+}
+
+/******************************************************************************/
+// Apple event descriptors used to terminate nested AERecord (of typeObjectSpecifier, etc) chains
+
+public let applicationRoot = NSAppleEventDescriptor.null()
+
+public let containerRoot = NSAppleEventDescriptor(descriptorType: typeCurrentContainer, data: nil)!
+
+// root descriptor for an object specifier describing an element whose state is being compared in a by-test specifier
+// e.g. `every track where (rating of «typeObjectBeingExamined» > 50)`
+public let specimenRoot = NSAppleEventDescriptor(descriptorType: typeObjectBeingExamined, data: nil)!
