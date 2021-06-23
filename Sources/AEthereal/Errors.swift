@@ -172,7 +172,7 @@ public class ConnectionError: AutomationError {
 }
 
 
-public class PackError: AutomationError {
+public class EncodeError: AutomationError {
     
     let object: Any
     
@@ -190,11 +190,9 @@ public class PackError: AutomationError {
 public class DecodeError: AutomationError {
     
     let type: Any.Type
-    let app: App
     let descriptor: NSAppleEventDescriptor
     
-    public init(app: App, descriptor: NSAppleEventDescriptor, type: Any.Type, message: String? = nil, cause: Error? = nil) {
-        self.app = app
+    public init(descriptor: NSAppleEventDescriptor, type: Any.Type, message: String? = nil, cause: Error? = nil) {
         self.descriptor = descriptor
         self.type = type
         super.init(code: decodeErrorCode, message: message, cause: cause)
@@ -203,17 +201,28 @@ public class DecodeError: AutomationError {
     // TO DO: worth including a method for trying to decode desc as Any; this should be used when constructing full error message (might also be useful to caller); or what about a var that returns the type it would decode as? (caveat: that probably won't work so well for AEList/AERecord descs due to their complexity and the obvious challenges of fabricating generic type objects on the fly)
     
     public override var message: String? { // TO DO: how best to phrase error message?
-        var value: Any = self.descriptor
-        var string = "Can't decode value as \(self.type)"
-        do {
-            value = try self.app.decodeAsAny(self.descriptor)
-        } catch {
-            string = "Can't decode malformed descriptor"
-        }
+        let value: Any = self.descriptor
+        let string = "Can't decode value as \(self.type)"
         return "\(string):\n\n\t\(value)" + (self._message != nil ? "\n\n\(self._message!)" : "")
     }
 }
 
+public class WrongType: AutomationError {
+    
+    let decoded: AEValue
+    let type: Any.Type
+    
+    public init(_ decoded: AEValue, type: Any.Type) {
+        self.decoded = decoded
+        self.type = type
+        super.init(code: decodeErrorCode)
+    }
+    
+    public override var message: String? {
+        "\(decoded) is not a \(type)"
+    }
+    
+}
 
 /******************************************************************************/
 // standard command error
@@ -252,24 +261,27 @@ public class CommandError: AutomationError { // raised whenever an application c
     }
     
     public var expectedType: Symbol? {
-        if let desc = self.reply?.forKeyword(AE4.OSAErrorKeywords.expectedType) {
-            return try? self.app.decode(desc) as Symbol
+        if
+            let desc = self.reply?.forKeyword(AE4.OSAErrorKeywords.expectedType),
+            case let .symbol(symbol) = try? self.app.decode(desc)
+        {
+            return symbol
         } else {
             return nil
         }
     }
     
-    public var offendingObject: Any? {
+    public var offendingObject: AEValue? {
         if let desc = self.reply?.forKeyword(AE4.OSAErrorKeywords.offendingObject) {
-            return try? self.app.decode(desc) as Any
+            return try? self.app.decode(desc)
         } else {
             return nil
         }
     }
     
-    public var partialResult: Any? {
+    public var partialResult: AEValue? {
         if let desc = self.reply?.forKeyword(AE4.OSAErrorKeywords.partialResult) {
-            return try? self.app.decode(desc) as Any
+            return try? self.app.decode(desc)
         } else {
             return nil
         }

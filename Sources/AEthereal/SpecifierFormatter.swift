@@ -29,7 +29,7 @@ public func formatSAObject(_ object: Any) -> String {
         return formatRootSpecifier(obj)
     case let obj as InsertionSpecifier:
         return formatInsertionSpecifier(obj)
-    case let obj as ObjectSpecifier:
+    case let obj as SingleObjectSpecifier:
         return formatObjectSpecifier(obj)
     case let obj as ComparisonTest:
         return formatComparisonTest(obj)
@@ -112,7 +112,7 @@ func formatInsertionSpecifier(_ specifier: InsertionSpecifier) -> String {
     return "<\(type(of: specifier))(kpos:\(specifier.insertionLocation),kobj:\(formatSAObject(specifier.parentQuery)))>"
 }
 
-func formatObjectSpecifier(_ specifier: ObjectSpecifier) -> String {
+func formatObjectSpecifier(_ specifier: SingleObjectSpecifier) -> String {
     let form = specifier.selectorForm.enumCodeValue
     var result = formatSAObject(specifier.parentQuery)
     switch AE4.IndexForm(rawValue: form) {
@@ -128,7 +128,7 @@ func formatObjectSpecifier(_ specifier: ObjectSpecifier) -> String {
     case .relativePosition: // specifier.previous/next(SYMBOL)
         if let seld = specifier.selectorData as? NSAppleEventDescriptor, // ObjectSpecifier's self-decoding does not decode ordinals
                 let name = [AE4.RelativeOrdinal.previous.rawValue: "previous", AE4.RelativeOrdinal.next.rawValue: "next"][seld.enumCodeValue],
-                let parent = specifier.parentQuery as? ObjectSpecifier {
+                let parent = specifier.parentQuery as? SingleObjectSpecifier {
             if specifier.wantType.typeCodeValue == parent.wantType.typeCodeValue {
                 return "\(result).\(name)()" // use shorthand form for neatness
             } else {
@@ -289,7 +289,7 @@ public func formatCommand(_ description: CommandDescription, applicationObject: 
      }
      */
     if description.ignoring != defaultIgnoring {
-        args.append("considering: \(description.ignoring)")
+        args.append("ignoring: \(description.ignoring)")
     }
     return "try \(parentSpecifier)(\(args.joined(separator: ", ")))"
 }

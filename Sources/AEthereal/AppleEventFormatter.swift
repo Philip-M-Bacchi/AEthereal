@@ -33,12 +33,12 @@ public func formatAppleEvent(descriptor event: NSAppleEventDescriptor, useTermin
             let errs = event.paramDescriptor(forKeyword: AE4.Keywords.errorString)?.stringValue
             return AutomationError(code: Int(errn), message: errs).errorDescription! // TO DO: use CommandError? (need to check it's happy with only replyEvent arg)
         } else if let reply = event.paramDescriptor(forKeyword: AE4.Keywords.directObject) { // format return value
-            return formatSAObject((try? App().decodeAsAny(reply)) ?? reply)
+            return formatSAObject((try? App().decode(reply)) ?? reply)
         } else {
             return MissingValue.description
         }
     } else { // fully format outgoing event
-        return formatCommand(CommandDescription(event: event, app: App()), applicationObject: App().application)
+        return event.description
     }
 }
 
@@ -61,72 +61,24 @@ public struct CommandDescription {
     public private(set) var waitReply: Bool = true // note that existing AppleEvent descriptors contain keyReplyRequestedAttr, which could be either SendOptions.waitForReply or .queueReply
     // TO DO: also include sendOptions for completeness
     public private(set) var withTimeout: TimeInterval = defaultTimeout
+    public private(set) var considering: Considerations = []
     public private(set) var ignoring: Considerations = [.case]
     
     // called by sendAppleEvent with a failed command's details
-    public init(name: String?, eventClass: OSType, eventID: OSType, parentSpecifier: Any?,
+    public init(eventClass: OSType, eventID: OSType, parentSpecifier: Any?,
                 directParameter: Any, keywordParameters: [KeywordParameter],
-                requestedType: Symbol?, waitReply: Bool, withTimeout: TimeInterval?, considering: Considerations?) {
-        if let commandName = name {
-            self.signature = .named(name: commandName, directParameter: directParameter,
-                                    keywordParameters: keywordParameters.map { ($0!, $2) }, requestedType: requestedType)
-        } else {
-            var parameters = [OSType:Any]()
-            if parameterExists(directParameter) { parameters[AE4.Keywords.directObject] = directParameter }
-            for (_, code, value) in keywordParameters where parameterExists(value) { parameters[code] = value }
-            if let symbol = requestedType { parameters[AE4.Keywords.requestedType] = symbol }
-            self.signature = .codes(eventClass: eventClass, eventID: eventID, parameters: parameters)
-        }
+                requestedType: Symbol?, waitReply: Bool, withTimeout: TimeInterval?, considering: Considerations?, ignoring: Considerations?) {
+        var parameters = [OSType:Any]()
+        if parameterExists(directParameter) { parameters[AE4.Keywords.directObject] = directParameter }
+        for (code, value) in keywordParameters where parameterExists(value) { parameters[code] = value }
+        if let symbol = requestedType { parameters[AE4.Keywords.requestedType] = symbol }
+        self.signature = .codes(eventClass: eventClass, eventID: eventID, parameters: parameters)
+        
         self.waitReply = waitReply
         self.subject = parentSpecifier
         if withTimeout != nil { self.withTimeout = withTimeout! }
-        if considering != nil { self.ignoring = considering! }
+        if considering != nil { self.considering = considering! }
+        if ignoring != nil { self.ignoring = ignoring! }
     }
     
-    // called by [e.g.] SwiftAutoEdit.app with an intercepted AppleEvent descriptor
-    public init(event: NSAppleEventDescriptor, app: App) {
-        // decode the event's parameters
-        var rawParameters = [OSType:Any]()
-        for i in 1...event.numberOfItems {
-            let desc = event.atIndex(i)!
-            rawParameters[event.keywordForDescriptor(at:i)] = (try? app.decodeAsAny(desc)) ?? desc
-        }
-        //
-        let eventClass = event.attributeDescriptor(forKeyword: AE4.Attributes.eventClass)!.typeCodeValue
-        let eventID = event.attributeDescriptor(forKeyword: AE4.Attributes.eventID)!.typeCodeValue
-        self.signature = .codes(eventClass: eventClass, eventID: eventID, parameters: rawParameters)
-        // decode subject attribute, if given
-        if let desc = event.attributeDescriptor(forKeyword: AE4.Attributes.subject) {
-            if desc.descriptorType != AE4.Types.null { // typeNull = root application object
-                self.subject = (try? app.decodeAsAny(desc)) ?? desc // TO DO: double-check formatter knows how to display descriptor (or any other non-specifier) as customRoot
-            }
-        }
-        // decode reply requested and timeout attributes (note: these attributes are unreliable since their values are passed via AESendMessage() rather than packed directly into the AppleEvent)
-        if let desc = event.attributeDescriptor(forKeyword: AE4.Attributes.replyRequested) { // TO DO: attr is unreliable
-            // keyReplyRequestedAttr appears to be boolean value encoded as Int32 (1=wait or queue reply; 0=no reply)
-            if desc.int32Value == 0 { self.waitReply = false }
-        }
-        if let timeout = event.attributeDescriptor(forKeyword: AE4.Attributes.timeout) { // TO DO: attr is unreliable
-            let timeoutInTicks = timeout.int32Value
-            if timeoutInTicks == -2 { // NoTimeout // TO DO: ditto
-                self.withTimeout = -2
-            } else if timeoutInTicks > 0 {
-                self.withTimeout = Double(timeoutInTicks) / 60.0
-            }
-        }
-        // considering/ignoring attributes
-        if let considersAndIgnoresDesc = event.attributeDescriptor(forKeyword: AE4.Attributes.considsAndIgnores) {
-            var considersAndIgnores: UInt32 = 0
-            (considersAndIgnoresDesc.data as NSData).getBytes(&considersAndIgnores, length: MemoryLayout<UInt32>.size)
-            if considersAndIgnores != defaultConsidersIgnoresMask {
-                for (option, _, considersFlag, ignoresFlag) in considerationsTable {
-                    if option == .case {
-                        if considersAndIgnores & ignoresFlag > 0 { self.ignoring.remove(option) }
-                    } else {
-                        if considersAndIgnores & considersFlag > 0 { self.ignoring.insert(option) }
-                    }
-                }
-            }
-        }
-    }
 }

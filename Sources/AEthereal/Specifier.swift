@@ -57,9 +57,8 @@
 import Foundation
 import AppKit
 
-/******************************************************************************/
-// Common protocol for all specifier and test clause types.
-
+/// An AppleEvent object model query component.
+/// Should either be a specifier or a test clause.
 public protocol Query: AEEncodable {
     
     var rootSpecifier: RootSpecifier { get }
@@ -68,94 +67,42 @@ public protocol Query: AEEncodable {
     
 }
 
-/******************************************************************************/
-// Abstract base class for all object and insertion specifiers
-
-// An object specifier is constructed as a linked list of AERecords of typeObjectSpecifier, terminated by a root descriptor (e.g. a null descriptor represents the root node of the app's Apple event object graph). The topmost node may also be an insertion location specifier, represented by an AERecord of typeInsertionLoc. The abstract Specifier class implements functionality common to both object and insertion specifiers.
-
-public class Specifier: Query {
+/// A specifier, which is a chainable AppleEvent object model query.
+public protocol Specifier: Query {
     
-    public var app: App
+    var app: App { get set }
     
-    public init(app: App) {
-        self.app = app
-    }
+    var parentQuery: Query { get }
+    var rootSpecifier: RootSpecifier { get }
+    
+}
+
+extension Specifier {
     
     public var rootSpecifier: RootSpecifier {
         return parentQuery.rootSpecifier
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        fatalError()
-    }
-    
 }
 
-public protocol ChildQuery: Query {
+/// An insertion location specifier.
+public final class InsertionSpecifier: Specifier {
     
-    // note that parentQuery and rootSpecifier properties are really only intended for internal use when traversing a specifier chain; while there is nothing to prevent client code using these properties the results are not guaranteed to be valid or usable queries (once constructed, object specifiers should be treated as opaque values); the proper way to identify an object's (or objects') container is to ask the application to return a specifier (or list of specifiers) to its `container` property, if it has one, e.g. `let parentFolder:FinItem = someFinderItem.container.get()`
-    
-    // return the next ObjectSpecifier/TestClause in query chain
-    var parentQuery: Query { get }
-    
-}
-
-extension ChildQuery {
-    
-    public var parentQuery: Query {
-        fatalError("ChildQuery.parentQuery must be overridden by subclasses.")
-    }
-    
-    public var rootSpecifier: RootSpecifier {
-        fatalError("ChildQuery.rootSpecifier must be overridden by subclasses.")
-    }
-    
-}
-
-extension Specifier: ChildQuery {
-
-    // convenience methods for sending Apple events using four-char codes (either OSTypes or Strings)
-
-    public func sendAppleEvent<T>(_ eventClass: OSType, _ eventID: OSType, _ parameters: [OSType: Any] = [:],
-                                  requestedType: Symbol? = nil, waitReply: Bool = true, sendOptions: SendOptions? = nil,
-                                  withTimeout: TimeInterval? = nil, ignoring: Considerations? = nil) throws -> T {
-        return try app.sendAppleEvent(eventClass: eventClass, eventID: eventID,
-                                          parentSpecifier: self, parameters: parameters,
-                                          requestedType: requestedType, waitReply: waitReply,
-                                          sendOptions: sendOptions, withTimeout: withTimeout, ignoring: ignoring)
-    }
-
-    // non-generic version of the above method; bound when T can't be inferred (either because caller doesn't use the return value or didn't declare a specific type for it, e.g. `let result = cmd.call()`), in which case Any is used
-
-    @discardableResult public func sendAppleEvent(_ eventClass: OSType, _ eventID: OSType, _ parameters: [OSType: Any] = [:],
-                                                  requestedType: Symbol? = nil, waitReply: Bool = true, sendOptions: SendOptions? = nil,
-                                                  withTimeout: TimeInterval? = nil, ignoring: Considerations? = nil) throws -> Any {
-        return try app.sendAppleEvent(eventClass: eventClass, eventID: eventID,
-                                          parentSpecifier: self, parameters: parameters,
-                                          requestedType: requestedType, waitReply: waitReply,
-                                          sendOptions: sendOptions, withTimeout: withTimeout, ignoring: ignoring)
-    }
-    
-}
-
-/******************************************************************************/
-// Insertion location specifier
-
-public class InsertionSpecifier: Specifier {
+    public var app: App
 
     // 'insl'
     public let insertionLocation: NSAppleEventDescriptor
 
     private(set) public var parentQuery: Query
 
-    public required init(insertionLocation: NSAppleEventDescriptor,
+    public init(insertionLocation: NSAppleEventDescriptor,
                          parentQuery: Query, app: App) {
         self.insertionLocation = insertionLocation
         self.parentQuery = parentQuery
-        super.init(app: app)
+        self.app = app
     }
     
-    public override func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: typeInsertionLoc)!
         desc.setDescriptor(try parentQuery.encodeAEDescriptor(app), forKeyword: keyAEObject)
         desc.setDescriptor(insertionLocation, forKeyword: keyAEPosition)
@@ -173,21 +120,20 @@ public class InsertionSpecifier: Specifier {
     
 }
 
-/******************************************************************************/
-// Property/single-element specifiers; identifies an attribute/describes a one-to-one relationship between nodes in the app's AEOM graph
-
-public protocol ObjectSpecifierProtocol: ChildQuery {
+/// An object specifier.
+public protocol ObjectSpecifier: Specifier {
     
     var wantType: NSAppleEventDescriptor { get }
     var selectorForm: NSAppleEventDescriptor { get }
     var selectorData: Any { get }
-    var parentQuery: Query { get }
     
 }
 
-// Represents property or single element specifier; adds property+elements vars, relative selectors, insertion specifiers
-public class ObjectSpecifier: Specifier, ObjectSpecifierProtocol {
-
+/// A property or single-element object specifier.
+public class SingleObjectSpecifier: Specifier, ObjectSpecifier {
+    
+    public var app: App
+    
     // 'want', 'form', 'seld'
     public let wantType: NSAppleEventDescriptor
     public let selectorForm: NSAppleEventDescriptor
@@ -195,16 +141,15 @@ public class ObjectSpecifier: Specifier, ObjectSpecifierProtocol {
     
     private(set) public var parentQuery: Query
 
-    public required init(wantType: NSAppleEventDescriptor, selectorForm: NSAppleEventDescriptor, selectorData: Any,
-                         parentQuery: Query, app: App) {
+    public required init(wantType: NSAppleEventDescriptor, selectorForm: NSAppleEventDescriptor, selectorData: Any, parentQuery: Query, app: App) {
         self.wantType = wantType
         self.selectorForm = selectorForm
         self.selectorData = selectorData
         self.parentQuery = parentQuery
-        super.init(app: app)
+        self.app = app
     }
 
-    public override func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.objectSpecifier)!
         desc.setDescriptor(try parentQuery.encodeAEDescriptor(app), forKeyword: AE4.ObjectSpecifierKeywords.container)
         desc.setDescriptor(wantType, forKeyword: AE4.ObjectSpecifierKeywords.desiredClass)
@@ -212,10 +157,6 @@ public class ObjectSpecifier: Specifier, ObjectSpecifierProtocol {
         desc.setDescriptor(try app.encode(selectorData), forKeyword: AE4.ObjectSpecifierKeywords.keyData)
         return desc
     }
-
-    // Containment test constructors
-
-    // note: ideally the following would only appear on objects constructed from an Its root; however, this would complicate the implementation while failing to provide any real benefit to users, who are unlikely to make such a mistake in the first place
 
     public func beginsWith(_ value: Any) -> TestClause {
         return ComparisonTest(operatorType: AE4.Descriptors.ContainmentTests.beginsWith, operand1: self, operand2: value, app: app)
@@ -235,44 +176,35 @@ public class ObjectSpecifier: Specifier, ObjectSpecifierProtocol {
     
 }
 
-// Comparison test constructors
-
-public func <(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func <(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.lessThan, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func <=(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func <=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.lessThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func ==(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func ==(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.equals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func !=(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func !=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.notEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func >(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func >(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.greaterThan, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func >=(lhs: ObjectSpecifier, rhs: Any) -> TestClause {
+public func >=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
     return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.greaterThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
-
-/******************************************************************************/
-// Multi-element specifiers; represents a one-to-many relationship between nodes in the app's AEOM graph
-
-// note: each glue should define an Elements class that subclasses ObjectSpecifier and adopts MultipleObjectSpecifier (which adds by range/test/all selectors)
-
-// note: by-range selector doesn't confirm APP/CON-based roots for start+stop specifiers; as with ITS-based roots this would add significant complexity to class hierarchy in order to detect mistakes that are unlikely to be made in practice (most errors are likely to be made further down the chain, e.g. getting the 'containment' hierarchy for more complex specifiers incorrect)
 
 public struct RangeSelector: AEEncodable { // holds data for by-range selectors
     // Start and stop are Con-based (i.e. relative to container) specifiers (App-based specifiers will also work, as
     // long as they have the same parent specifier as the by-range specifier itself). For convenience, users can also
     // pass non-specifier values (typically Strings and Ints) to represent simple by-name and by-index specifiers of
-    // the same element class; these will be converted to specifiers automatically when packed.
+    // the same element class; these will be converted to specifiers automatically when encoded.
     public let start: Any
     public let stop: Any
     public let wantType: NSAppleEventDescriptor
@@ -283,12 +215,12 @@ public struct RangeSelector: AEEncodable { // holds data for by-range selectors
         self.wantType = wantType
     }
 
-    private func packSelector(_ selectorData: Any, app: App) throws -> NSAppleEventDescriptor {
+    private func encode(_ selectorData: Any, app: App) throws -> NSAppleEventDescriptor {
         var selectorForm: NSAppleEventDescriptor
         switch selectorData {
         case is NSAppleEventDescriptor:
             return selectorData as! NSAppleEventDescriptor
-        case is Specifier: // technically, only ObjectSpecifier makes sense here, tho AS prob. doesn't prevent insertion loc or multi-element specifier being passed instead
+        case is Specifier: // technically, only SingleObjectSpecifier makes sense here, tho AS prob. doesn't prevent insertion loc or multi-element specifier being passed instead
             return try (selectorData as! Specifier).encodeAEDescriptor(app)
         default: // encode anything else as a by-name or by-index specifier
             selectorForm = selectorData is String ? AE4.Descriptors.IndexForms.name : AE4.Descriptors.IndexForms.absolutePosition
@@ -303,21 +235,15 @@ public struct RangeSelector: AEEncodable { // holds data for by-range selectors
 
     public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.rangeDescriptor)!
-        desc.setDescriptor(try packSelector(start, app: app), forKeyword: AE4.RangeSpecifierKeywords.start)
-        desc.setDescriptor(try packSelector(stop, app: app), forKeyword: AE4.RangeSpecifierKeywords.stop)
+        desc.setDescriptor(try encode(start, app: app), forKeyword: AE4.RangeSpecifierKeywords.start)
+        desc.setDescriptor(try encode(stop, app: app), forKeyword: AE4.RangeSpecifierKeywords.stop)
         return desc
     }
 }
 
-/******************************************************************************/
-// Test clause; used in by-test specifiers
-
-// note: only TestClauses constructed from Its roots are actually valid; however, enfording this at compile-time would require a more complex class/protocol structure, while checking this at runtime would require calling Query.rootSpecifier.rootObject and checking object is 'its' descriptor. As it's highly unlikely users will use an App or Con root by accident, we'll live recklessly and let the gods of AppleScript punish any user foolish enough to do so.
-
+/// A test clause. Must descend from a `RootSpecifier` with kind `.specimen`.
 public protocol TestClause: Query {
 }
-
-// Logical test constructors
 
 public func &&(lhs: TestClause, rhs: TestClause) -> TestClause {
     return LogicalTest(operatorType: AE4.Descriptors.LogicalTests.and, operands: [lhs, rhs], app: lhs.app)
@@ -331,14 +257,15 @@ public prefix func !(op: TestClause) -> TestClause {
     return LogicalTest(operatorType: AE4.Descriptors.LogicalTests.not, operands: [op], app: op.app)
 }
 
+/// A comparison or containment test clause.
 public class ComparisonTest: TestClause {
     
     public var app: App
     
-    public let operatorType: NSAppleEventDescriptor, operand1: ObjectSpecifier, operand2: Any
+    public let operatorType: NSAppleEventDescriptor, operand1: SingleObjectSpecifier, operand2: Any
     
     init(operatorType: NSAppleEventDescriptor,
-         operand1: ObjectSpecifier, operand2: Any, app: App) {
+         operand1: SingleObjectSpecifier, operand2: Any, app: App) {
         self.operatorType = operatorType
         self.operand1 = operand1
         self.operand2 = operand2
@@ -375,7 +302,8 @@ public class ComparisonTest: TestClause {
     
 }
 
-public class LogicalTest: TestClause, ChildQuery {
+/// A boolean operation test clause.
+public class LogicalTest: TestClause {
     
     public var app: App
 
@@ -405,10 +333,10 @@ public class LogicalTest: TestClause, ChildQuery {
     
 }
 
-/******************************************************************************/
-// Specifier roots (all Specifier chains must originate from a RootSpecifier instance)
-
-public class RootSpecifier: Specifier, ObjectSpecifierProtocol {
+/// The root of all specifier chains.
+public class RootSpecifier: ObjectSpecifier {
+    
+    public var app: App
     
     public enum Kind {
         /// Root of all absolute object specifiers.
@@ -433,7 +361,7 @@ public class RootSpecifier: Specifier, ObjectSpecifierProtocol {
     
     public init(_ kind: Kind, app: App) {
         self.kind = kind
-        super.init(app: app)
+        self.app = app
     }
     
     public var wantType: NSAppleEventDescriptor {
@@ -456,17 +384,14 @@ public class RootSpecifier: Specifier, ObjectSpecifierProtocol {
         }
     }
     
-    // Query/Specifier-inherited properties and methods that recursively call their parent specifiers are overridden here to ensure they terminate:
-    
     public var parentQuery: Query {
         self
     }
-    
-    public override var rootSpecifier: RootSpecifier {
+    public var rootSpecifier: RootSpecifier {
         self
     }
     
-    public override func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         try app.encode(selectorData)
     }
     

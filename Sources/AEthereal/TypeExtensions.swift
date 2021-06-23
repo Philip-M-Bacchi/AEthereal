@@ -11,7 +11,6 @@ import Foundation
 /******************************************************************************/
 // Specifier and Symbol subclasses encode themselves
 // Set, Array, Dictionary structs encode and decode themselves
-// Optional and MayBeMissing enums encode and decode themselves
 
 public protocol AEEncodable {
     func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor
@@ -53,91 +52,139 @@ public enum MissingValueType: CustomStringConvertible, AECodable {
 
 public let MissingValue = MissingValueType() // the `missing value` constant; serves a similar purpose to `Optional<T>.none` (`nil`), except that it's non-generic so isn't a giant PITA to deal with when casting to/from `Any`
 
-
-// TO DO: define `==`/`!=` operators that treat MayBeMissing<T>.missing(…) and MissingValue and Optional<T>.none as equivalent? Or get rid of `MayBeMissing` enum and (if possible/practical) support `Optional<T> as? MissingValueType` and vice-versa?
-
-// define a generic type for use in command's return type that allows the value to be missing, e.g. `Contacts().people.birthDate.get() as [MayBeMissing<String>]`
-
-// TO DO: it may be simpler for users if commands always return Optional<T>.none when an Optional return type is specified, and MissingValue when one is not
-
-public enum MayBeMissing<T>: AECodable { // TO DO: rename 'MissingOr<T>'? this'd be more in keeping with TypeSupportSpec-generated enum names (e.g. 'IntOrStringOrMissing')
-    case value(T)
-    case missing(MissingValueType)
-    
-    public init(_ value: T) {
-        switch value {
-        case is MissingValueType:
-            self = .missing(MissingValue)
-        default:
-            self = .value(value)
-        }
-    }
-    
-    public init() {
-        self = .missing(MissingValue)
-    }
-    
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        switch self {
-        case .value(let value):
-            return try app.encode(value)
-        case .missing(_):
-            return missingValueDesc
-        }
-    }
-    
-    public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
-        if isMissingValue(descriptor) {
-            self = .missing(MissingValue)
-        } else {
-            self = .value(try app.decode(descriptor) as T)
-        }
-    }
-    
-    public var value: T? { // unbox the actual value, or return `nil` if it was MissingValue; this should allow users to bridge safely from MissingValue to nil
-        switch self {
-        case .value(let value):
-            return value
-        case .missing(_):
-            return nil
-        }
-    }
-}
-
-
-func isMissingValue(_ desc: NSAppleEventDescriptor) -> Bool { // check if the given AEDesc is the `missing value` constant
+/// Whether `desc` is the "missing value" symbol.
+func isMissingValue(_ desc: NSAppleEventDescriptor) -> Bool {
     return desc.descriptorType == AE4.Types.type && desc.typeCodeValue == AE4.Classes.missingValue
 }
 
-// allow optionals to be used in place of MayBeMissing… arguably, MayBeMissing won't be needed if this works
-
-extension Optional: AECodable {
+extension Optional: AECodable where Wrapped == AEValue {
     
     public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        switch self {
-        case .some(let value):
-            return try app.encode(value)
-        case .none:
-            return missingValueDesc
-        }
+        try self.map { try app.encode($0) } ?? missingValueDesc
     }
     
     public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
-        if isMissingValue(descriptor) {
-            self = .none
-        } else {
-            self = .some(try app.decode(descriptor))
+        self = isMissingValue(descriptor) ? nil : try app.decode(descriptor)
+    }
+    
+}
+
+extension CGPoint: AECodable {
+    
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+        var data = Data(capacity: 2)
+        data.append(y)
+        data.append(x)
+        return NSAppleEventDescriptor(descriptorType: AE4.Types.qdPoint, data: data)!
+    }
+    
+    public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
+        if let point = descriptor.coerce(toDescriptorType: AE4.Types.qdPoint) {
+            let data = point.data
+            let scalarSize = MemoryLayout<Int16>.size
+            
+            var y: Int16 = 0
+            withUnsafeMutableBytes(of: &y) { y in
+                _ = data.copyBytes(to: y, from: 0..<scalarSize)
+            }
+            var x: Int16 = 0
+            withUnsafeMutableBytes(of: &x) { x in
+                _ = data.copyBytes(to: x, from: scalarSize..<(2 * scalarSize))
+            }
+            
+            self.init(x: CGFloat(x), y: CGFloat(y))
+        }
+        throw DecodeError(descriptor: descriptor, type: Self.self)
+    }
+    
+}
+
+extension CGRect: AECodable {
+    
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+        var data = Data(capacity: 4)
+        data.append(minY)
+        data.append(minX)
+        data.append(maxY)
+        data.append(maxX)
+        return NSAppleEventDescriptor(descriptorType: AE4.Types.qdRectangle, data: data)!
+    }
+    
+    public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
+        if let rect = descriptor.coerce(toDescriptorType: AE4.Types.qdRectangle) {
+            let data = rect.data
+            let scalarSize = MemoryLayout<Int16>.size
+            
+            var y0: Int16 = 0
+            withUnsafeMutableBytes(of: &y0) { y0 in
+                _ = data.copyBytes(to: y0, from: 0..<scalarSize)
+            }
+            var x0: Int16 = 0
+            withUnsafeMutableBytes(of: &x0) { x0 in
+                _ = data.copyBytes(to: x0, from: scalarSize..<(2 * scalarSize))
+            }
+            var y1: Int16 = 0
+            withUnsafeMutableBytes(of: &y1) { y1 in
+                _ = data.copyBytes(to: y1, from: (2 * scalarSize)..<(3 * scalarSize))
+            }
+            var x1: Int16 = 0
+            withUnsafeMutableBytes(of: &x1) { x1 in
+                _ = data.copyBytes(to: x1, from: (3 * scalarSize)..<(4 * scalarSize))
+            }
+            
+            self.init(x: CGFloat(x0), y: CGFloat(y0), width: CGFloat(x1 - x0), height: CGFloat(y1 - y0))
+        }
+        throw DecodeError(descriptor: descriptor, type: Self.self)
+    }
+    
+}
+
+extension RGBColor: AECodable {
+    
+    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+        var data = Data(capacity: 3)
+        data.append(r)
+        data.append(g)
+        data.append(b)
+        return NSAppleEventDescriptor(descriptorType: AE4.Types.rgbColor, data: data)!
+    }
+    
+    public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
+        if let color = descriptor.coerce(toDescriptorType: AE4.Types.rgbColor) {
+            let data = color.data
+            let scalarSize = MemoryLayout<UInt16>.size
+            
+            var r: UInt16 = 0
+            withUnsafeMutableBytes(of: &r) { r in
+                _ = data.copyBytes(to: r, from: 0..<scalarSize)
+            }
+            var g: UInt16 = 0
+            withUnsafeMutableBytes(of: &g) { g in
+                _ = data.copyBytes(to: g, from: scalarSize..<(2 * scalarSize))
+            }
+            var b: UInt16 = 0
+            withUnsafeMutableBytes(of: &b) { b in
+                _ = data.copyBytes(to: b, from: (2 * scalarSize)..<(3 * scalarSize))
+            }
+            
+            self.init(r: r, g: g, b: b)
+        }
+        throw DecodeError(descriptor: descriptor, type: Self.self)
+    }
+    
+}
+
+extension Data {
+    
+    mutating func append<Element>(_ newElement: Element) {
+        Swift.withUnsafeBytes(of: newElement) {
+            append(contentsOf: $0)
         }
     }
     
 }
 
-
-/******************************************************************************/
-// extend Swift's standard collection types to encode and decode themselves
-
-
-extension Set: AECodable { // note: AEM doesn't define a standard AE type for Sets, so encode/decode as typeAEList (we'll assume client code has its own reasons for suppling/requesting Set<T> instead of Array<T>)
+extension Array: AECodable where Element == AEValue {
     
     public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         let desc = NSAppleEventDescriptor.list()
@@ -146,86 +193,17 @@ extension Set: AECodable { // note: AEM doesn't define a standard AE type for Se
     }
     
     public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
-        var result = Set<Element>()
-        switch descriptor.descriptorType {
-        case AE4.Types.list:
-            for i in 1..<(descriptor.numberOfItems+1) { // bug workaround for zero-length range: 1...0 throws error, but 1..<1 doesn't
-                do {
-                    result.insert(try app.decode(descriptor.atIndex(i)!) as Element)
-                } catch {
-                    throw DecodeError(app: app, descriptor: descriptor, type: Self.self, message: "Can't decode item \(i) as \(Element.self).")
-                }
-            }
-        default:
-            result.insert(try app.decode(descriptor) as Element)
-        }
-        self = result
-    }
-    
-}
-
-
-extension Array: AECodable {
-    
-    // TO DO: protocol hierarchy for Swift's various numeric types is both complicated and useless; see about factoring out `Int(n) as! Element` as a block, in which case copy-paste can be replaced with generic
-    
-    private static func decodeInt16Array(_ desc: NSAppleEventDescriptor, app: App, indexes: [Int]) throws -> [Element] {
-        if Element.self == Int.self { // common case
-            var result = [Element]()
-            let data = desc.data
-            for i in indexes { // QDPoint is YX, so swap to give [X,Y]
-                var n: Int16 = 0
-                (data as NSData).getBytes(&n, range: NSRange(location: i*MemoryLayout<Int16>.size, length: MemoryLayout<Int16>.size))
-                result.append(Int(n) as! Element) // note: can't use Element(n) here as Swift doesn't define integer constructors in IntegerType protocol (but does for FloatingPointType)
-            }
-            return result
-        } else { // for any other Element, decode as Int then repack as AEList of typeSInt32, and [try to] decode that as [Element] (bit lazy, but will do)
-            return try self.init(from: try app.encode(app.decode(desc) as [Int]), app: app)
-        }
-    }
-    
-    private static func decodeUInt16Array(_ desc: NSAppleEventDescriptor, app: App, indexes:[Int]) throws -> [Element] {
-        if Element.self == Int.self { // common case
-            var result = [Element]()
-            let data = desc.data
-            for i in indexes { // QDPoint is YX, so swap to give [X,Y]
-                var n: UInt16 = 0
-                (data as NSData).getBytes(&n, range: NSRange(location: i*MemoryLayout<UInt16>.size, length: MemoryLayout<UInt16>.size))
-                result.append(Int(n) as! Element) // note: can't use Element(n) here as Swift doesn't define integer constructors in IntegerType protocol (but does for FloatingPointType)
-            }
-            return result
-        } else { // for any other Element, decode as Int then repack as AEList of typeSInt32, and [try to] decode that as [Element] (bit lazy, but will do)
-            return try self.init(from: try app.encode(app.decode(desc) as [Int]), app: app)
-        }
-    }
-    
-    //
-    
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        let desc = NSAppleEventDescriptor.list()
-        for item in self { desc.insert(try app.encode(item), at: 0) }
-        return desc
-    }
-    
-    public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
         switch descriptor.descriptorType {
         case AE4.Types.list:
             var result = [Element]()
             for i in 1..<(descriptor.numberOfItems+1) { // bug workaround for zero-length range: 1...0 throws error, but 1..<1 doesn't
                 do {
-                    result.append(try app.decode(descriptor.atIndex(i)!) as Element)
+                    result.append(try app.decode(descriptor.atIndex(i)!))
                 } catch {
-                    throw DecodeError(app: app, descriptor: descriptor, type: Self.self, message: "Can't decode item \(i) as \(Element.self).")
+                    throw DecodeError(descriptor: descriptor, type: Self.self, message: "Can't decode item \(i) as \(Element.self).")
                 }
             }
             self = result
-            // note: coercing QD types to typeAEList and decoding those would be simpler, but while AEM provides coercion handlers for coercing e.g. typeAEList to typeQDPoint, it doesn't provide handlers for the reverse (coercing a typeQDPoint desc to typeAEList merely produces a single-item AEList containing the original typeQDPoint, not a 2-item AEList of typeSInt16)
-        case AE4.Types.qdPoint: // SInt16[2]
-            self = try Array<Element>.decodeInt16Array(descriptor, app: app, indexes: [1,0]) // QDPoint is YX; swap to give [X,Y]
-        case AE4.Types.qdRectangle: // SInt16[4]
-            self = try Array<Element>.decodeInt16Array(descriptor, app: app, indexes: [1,0,3,2]) // QDRectangle is Y0X0Y1X1; swap to give [X0,Y0,X1,Y1]
-        case AE4.Types.rgbColor: // UInt16[3] (used by older Carbon apps; Cocoa apps use lists)
-            self = try Array<Element>.decodeUInt16Array(descriptor, app: app, indexes: [0,1,2])
         default:
             self = [try app.decode(descriptor) as Element]
         }
@@ -234,68 +212,35 @@ extension Array: AECodable {
 }
 
 
-extension Dictionary: AECodable {
+extension Dictionary: AECodable where Key == Symbol, Value == AEValue {
     
     public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
         var desc = NSAppleEventDescriptor.record()
         var isCustomRecordType: Bool = false
-        if let key = Symbol(code: AE4.Properties.class, type: typeType) as? Key, let recordClass = self[key] as? Symbol { // TO DO: confirm this works
+        if case let .symbol(recordClass) = self[Symbol(code: AE4.Properties.class, type: typeType)] {
             desc = desc.coerce(toDescriptorType: recordClass.code)!
             isCustomRecordType = true
         }
         for (key, value) in self {
-            guard let keySymbol = key as? Symbol else {
-                throw PackError(object: key, message: "Can't encode non-Symbol dictionary key of type: \(type(of: key))")
-            }
-            if !(keySymbol.code == AE4.Properties.class && isCustomRecordType) {
-                desc.setDescriptor(try app.encode(value), forKeyword: keySymbol.code)
+            if !(key.code == AE4.Properties.class && isCustomRecordType) {
+                desc.setDescriptor(try app.encode(value), forKeyword: key.code)
             }
         }
         return desc
     }
     
     public init(from descriptor: NSAppleEventDescriptor, app: App) throws {
-        if !descriptor.isRecordDescriptor {
-            throw DecodeError(app: app, descriptor: descriptor, type: Self.self, message: "Not a record.")
+        guard descriptor.isRecordDescriptor else {
+            throw DecodeError(descriptor: descriptor, type: Self.self, message: "Not a record.")
         }
-        var result = [Key:Value]()
+        self.init()
         if descriptor.descriptorType != AE4.Types.record {
-            if let key = Symbol(code: AE4.Properties.class, type: typeType) as? Key,
-                let value = Symbol(code: descriptor.descriptorType, type: typeType) as? Value {
-                result[key] = value
-            }
+            self[Symbol(code: AE4.Properties.class, type: typeType)] = .symbol(Symbol(code: descriptor.descriptorType, type: typeType))
         }
         for i in 1..<(descriptor.numberOfItems + 1) {
             let property = descriptor.keywordForDescriptor(at: i)
-            // decode record property whose key is a four-char code (typically corresponding to a dictionary-defined property name)
-            guard let key = Symbol(code: property, type: AE4.Types.property) as? Key else {
-                throw DecodeError(app: app, descriptor: descriptor, type: Key.self,
-                                  message: "Can't decode record keys as non-Symbol type: \(Key.self)")
-            }
-            do {
-                result[key] = try app.decode(descriptor.atIndex(i)!) as Value
-            } catch {
-                throw DecodeError(app: app, descriptor: descriptor, type: Value.self,
-                                  message: "Can't decode value of record's \(key) property as Swift type: \(Value.self)")
-            }
+            self[Symbol(code: property, type: AE4.Types.property)] = try app.decode(descriptor.atIndex(i)!)
         }
-        self = result
     }
     
 }
-
-// specialized return type for use in commands to return the _entire_ reply AppleEvent as a raw AppleEvent descriptor
-
-public struct ReplyEventDescriptor {
-    
-    let descriptor: NSAppleEventDescriptor // the reply AppleEvent
-    
-    public var result: NSAppleEventDescriptor? { // the application-returned result value, if any
-        return descriptor.paramDescriptor(forKeyword: keyDirectObject)
-    }
-    
-    public var errorNumber: Int { // the application-returned error number, if any; 0 = noErr
-        return Int(descriptor.paramDescriptor(forKeyword: keyErrorNumber)?.int32Value ?? 0)
-    }
-}
-

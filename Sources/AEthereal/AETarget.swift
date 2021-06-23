@@ -24,19 +24,19 @@ public enum AETarget: CustomStringConvertible {
     public var description: String {
         switch self {
         case .current:
-            return "current application"
+            return "current app"
         case .name(let name):
-            return "application ‘\(name)’"
+            return "app named \(name)"
         case .url(let url):
-            return "application at ‘\(url.absoluteString)’"
+            return "app at \(url.absoluteString)"
         case .bundleIdentifier(let identifier):
-            return "application id ‘\(identifier)’"
+            return "app id \(identifier)"
         case .processIdentifier(let pid):
-            return NSRunningApplication(processIdentifier: pid)?.localizedName.map { $0 + " (by PID)" } ?? "dead PID \(pid)"
+            return "app with pid \(pid)"
         case .descriptor(let descriptor):
-            return (try? RootSpecifier(addressDescriptor: descriptor).property(pName).get() as String).map { $0 + "(by address descriptor)" } ?? "(unknown address descriptor)"
+            return "app by descriptor \(descriptor)"
         case .none:
-            return "(empty target)"
+            return "invalid app"
         }
     }
     
@@ -95,7 +95,12 @@ public enum AETarget: CustomStringConvertible {
     }
     
     private func bundleIdentifier(processDescriptor: NSAppleEventDescriptor) -> String? {
-        return try? RootSpecifier(addressDescriptor: processDescriptor).property(pID).get() as String
+        switch try? RootSpecifier(addressDescriptor: processDescriptor).property(pID).get() {
+        case let .string(id):
+            return id
+        default:
+            return nil
+        }
     }
     
     /// Whether this target can be automatically relaunched.

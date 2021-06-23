@@ -80,8 +80,6 @@ public func eightCharCode(_ eventClass: OSType, _ eventID: OSType) -> UInt64 {
     return UInt64(eventClass) << 32 | UInt64(eventID)
 }
 
-// misc AEDesc packing functions
-
 extension NSAppleEventDescriptor {
     
     convenience init(type: OSType, code: OSType) {
@@ -99,20 +97,6 @@ extension NSAppleEventDescriptor {
 let symbolDescriptorTypes: Set<DescType> = [typeType, typeEnumerated, typeProperty, typeKeyword]
 
 /******************************************************************************/
-// consids/ignores options are defined in ASRegistry.h (they're a crappy design and a complete mess, and most apps completely ignore them, but we support them anyway in order to ensure feature parity with AS)
-
-public enum Consideration {
-    case `case`
-    case diacritic
-    case whiteSpace
-    case hyphens
-    case expansion
-    case punctuation
-//  case replies // TO DO: check if this is ever supplied by AS; if it is, might be an idea to add it; if not, delete
-    case numericStrings
-}
-
-public typealias Considerations = Set<Consideration>
 
 public typealias SendOptions = NSAppleEventDescriptor.SendOptions
 
