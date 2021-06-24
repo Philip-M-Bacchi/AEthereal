@@ -12,6 +12,7 @@ public indirect enum AEValue {
     case objectSpecifier(SingleObjectSpecifier)
     case insertionSpecifier(InsertionSpecifier)
     
+    case range(RangeSelector)
     case comparisonTest(ComparisonTest)
     case logicalTest(LogicalTest)
     
@@ -129,6 +130,7 @@ extension AEValue: CustomStringConvertible {
              let .rootSpecifier(object as Any),
              let .objectSpecifier(object as Any),
              let .insertionSpecifier(object as Any),
+             let .range(object as Any),
              let .comparisonTest(object as Any),
              let .logicalTest(object as Any),
              let .symbol(object as Any),
@@ -162,6 +164,7 @@ extension AEValue: AEEncodable {
         case let .rootSpecifier(object as AEEncodable),
              let .objectSpecifier(object as AEEncodable),
              let .insertionSpecifier(object as AEEncodable),
+             let .range(object as AEEncodable),
              let .comparisonTest(object as AEEncodable),
              let .logicalTest(object as AEEncodable),
              let .symbol(object as AEEncodable),

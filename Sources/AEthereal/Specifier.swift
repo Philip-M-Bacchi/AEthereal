@@ -212,7 +212,7 @@ public struct RangeSelector: AEEncodable { // holds data for by-range selectors
         try .range(start: start, stop: stop, app: app)
     }
     
-    public init?(from descriptor: AEDescriptor, wantType: AE4.AEType, app: App) throws {
+    public init(from descriptor: AEDescriptor, wantType: AE4.AEType, app: App) throws {
         guard descriptor.type == .rangeDescriptor else {
             throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Malformed selector in by-range specifier.")
         }

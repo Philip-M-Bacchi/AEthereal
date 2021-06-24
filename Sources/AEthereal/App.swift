@@ -203,7 +203,7 @@ extension App {
             throw DecodeError(descriptor: desc, type: SingleObjectSpecifier.self, message: "Can't decode malformed object specifier.")
         }
         do {
-            let selectorData = try decode(selectorDesc)
+            var selectorData = try decode(selectorDesc)
             var objectSpecifierClass = SingleObjectSpecifier.self // most reference forms describe one-to-one relationships
             switch selectorForm {
             case .propertyID:
@@ -224,6 +224,7 @@ extension App {
                 }
             case .range:
                 objectSpecifierClass = MultipleObjectSpecifier.self
+                selectorData = .range(try RangeSelector(from: desc, wantType: AE4.AEType(rawValue: wantType.typeCodeValue), app: self))
             case .test:
                 objectSpecifierClass = MultipleObjectSpecifier.self
                 if !(selectorData is Query) {
