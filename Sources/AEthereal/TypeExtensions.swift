@@ -22,27 +22,14 @@ public protocol AEDecodable {
 
 public typealias AECodable = AEEncodable & AEDecodable
 
-
-/******************************************************************************/
-// `missing value` constant
-
-// note: this design is not yet finalized (ideally we'd just map cMissingValue to nil, but returning nil for commands whose return type is `Any` is a PITA as all of Swift's normal unboxing techniques break, and the only way to unbox is to cast from Any to Optional<T> first, which in turn requires that T is known in advance, in which case what's the point of returning Any in the first place?)
-
-let missingValueDesc = AEDescriptor(typeCode: AE4.Classes.missingValue)
-
-/// Whether `desc` is the "missing value" symbol.
-func isMissingValue(_ desc: AEDescriptor) -> Bool {
-    desc.type == .type && desc.typeCodeValue == AE4.Classes.missingValue
-}
-
 extension Optional: AECodable where Wrapped == AEValue {
     
     public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try self.map { try app.encode($0) } ?? missingValueDesc
+        try self.map { try app.encode($0) } ?? .missingValue
     }
     
     public init(from descriptor: AEDescriptor, app: App) throws {
-        self = isMissingValue(descriptor) ? nil : try app.decode(descriptor)
+        self = descriptor.isMissingValue ? nil : try app.decode(descriptor)
     }
     
 }

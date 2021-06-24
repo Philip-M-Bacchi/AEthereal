@@ -10,6 +10,13 @@ extension AEDescriptor {
         AE4.AEType(rawValue: descriptorType)
     }
     
+    public static var missingValue: AEDescriptor {
+        AEDescriptor(typeCode: AE4.Classes.missingValue)
+    }
+    public var isMissingValue: Bool {
+        type == .type && typeCodeValue == AE4.Classes.missingValue
+    }
+    
     public convenience init?(type: AE4.AEType, bytes: UnsafeRawPointer?, length byteCount: Int) {
         self.init(descriptorType: type.rawValue, bytes: bytes, length: byteCount)
     }

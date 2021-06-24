@@ -93,7 +93,7 @@ extension App {
             return .logicalTest(try self.decodeAsLogicalDescriptor(desc))
         
         case .type, .enumerated, .property, .keyword, .absoluteOrdinal:
-            return isMissingValue(desc) ? .missingValue : .symbol(Symbol(from: desc, app: self))
+            return desc.isMissingValue ? .missingValue : .symbol(Symbol(from: desc, app: self))
         
         case .true, .false, .boolean:
             return .bool(try Bool(from: desc, app: self))

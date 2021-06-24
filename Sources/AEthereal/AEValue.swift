@@ -185,7 +185,7 @@ extension AEValue: AEEncodable {
         case let .record(record):
             return try record.encodeAEDescriptor(app)
         case .missingValue:
-            return missingValueDesc
+            return .missingValue
         }
     }
     
