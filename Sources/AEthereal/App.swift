@@ -92,7 +92,7 @@ extension App {
         case .logicalDescriptor:
             return .logicalTest(try self.decodeAsLogicalDescriptor(desc))
         
-        case .type, .enumerated, .property, .keyword:
+        case .type, .enumerated, .property, .keyword, .absoluteOrdinal:
             return isMissingValue(desc) ? .missingValue : .symbol(Symbol(from: desc, app: self))
         
         case .true, .false, .boolean:
