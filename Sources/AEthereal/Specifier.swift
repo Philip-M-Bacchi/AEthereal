@@ -90,32 +90,18 @@ public final class InsertionSpecifier: Specifier {
     
     public var app: App
 
-    // 'insl'
-    public let insertionLocation: NSAppleEventDescriptor
+    public let insertionLocation: AE4.InsertionLocation
 
     private(set) public var parentQuery: Query
 
-    public init(insertionLocation: NSAppleEventDescriptor,
-                         parentQuery: Query, app: App) {
+    public init(insertionLocation: AE4.InsertionLocation, parentQuery: Query, app: App) {
         self.insertionLocation = insertionLocation
         self.parentQuery = parentQuery
         self.app = app
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: typeInsertionLoc)!
-        desc.setDescriptor(try parentQuery.encodeAEDescriptor(app), forKeyword: keyAEObject)
-        desc.setDescriptor(insertionLocation, forKeyword: keyAEPosition)
-        return desc
-    }
-    
-    public enum Kind: OSType {
-        case beginning = 0x62676E67, end = 0x656E6420
-        case before = 0x6265666F, after = 0x61667465
-    }
-    
-    public var kind: Kind? {
-        return Kind(rawValue: insertionLocation.enumCodeValue)
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        try .insertionSpecifier(container: parentQuery, location: insertionLocation, app: app)
     }
     
 }
@@ -123,9 +109,9 @@ public final class InsertionSpecifier: Specifier {
 /// An object specifier.
 public protocol ObjectSpecifier: Specifier {
     
-    var wantType: NSAppleEventDescriptor { get }
-    var selectorForm: NSAppleEventDescriptor { get }
-    var selectorData: Any { get }
+    var wantType: AE4.AEType { get }
+    var selectorForm: AE4.IndexForm { get }
+    var selectorData: AEEncodable { get }
     
 }
 
@@ -135,13 +121,13 @@ public class SingleObjectSpecifier: Specifier, ObjectSpecifier {
     public var app: App
     
     // 'want', 'form', 'seld'
-    public let wantType: NSAppleEventDescriptor
-    public let selectorForm: NSAppleEventDescriptor
-    public let selectorData: Any
+    public let wantType: AE4.AEType
+    public let selectorForm: AE4.IndexForm
+    public let selectorData: AEEncodable
     
     private(set) public var parentQuery: Query
 
-    public required init(wantType: NSAppleEventDescriptor, selectorForm: NSAppleEventDescriptor, selectorData: Any, parentQuery: Query, app: App) {
+    public required init(wantType: AE4.AEType, selectorForm: AE4.IndexForm, selectorData: AEEncodable, parentQuery: Query, app: App) {
         self.wantType = wantType
         self.selectorForm = selectorForm
         self.selectorData = selectorData
@@ -149,55 +135,50 @@ public class SingleObjectSpecifier: Specifier, ObjectSpecifier {
         self.app = app
     }
 
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.objectSpecifier)!
-        desc.setDescriptor(try parentQuery.encodeAEDescriptor(app), forKeyword: AE4.ObjectSpecifierKeywords.container)
-        desc.setDescriptor(wantType, forKeyword: AE4.ObjectSpecifierKeywords.desiredClass)
-        desc.setDescriptor(selectorForm, forKeyword: AE4.ObjectSpecifierKeywords.keyForm)
-        desc.setDescriptor(try app.encode(selectorData), forKeyword: AE4.ObjectSpecifierKeywords.keyData)
-        return desc
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        try .objectSpecifier(container: parentQuery, type: wantType, form: selectorForm, data: selectorData, app: app)
     }
 
-    public func beginsWith(_ value: Any) -> TestClause {
-        return ComparisonTest(operatorType: AE4.Descriptors.ContainmentTests.beginsWith, operand1: self, operand2: value, app: app)
+    public func beginsWith(_ value: AEEncodable) -> TestClause {
+        return ComparisonTest(operatorType: .beginsWith, operand1: self, operand2: value, app: app)
     }
 
-    public func endsWith(_ value: Any) -> TestClause {
-        return ComparisonTest(operatorType: AE4.Descriptors.ContainmentTests.endsWith, operand1: self, operand2: value, app: app)
+    public func endsWith(_ value: AEEncodable) -> TestClause {
+        return ComparisonTest(operatorType: .endsWith, operand1: self, operand2: value, app: app)
     }
 
-    public func contains(_ value: Any) -> TestClause {
-        return ComparisonTest(operatorType: AE4.Descriptors.ContainmentTests.contains, operand1: self, operand2: value, app: app)
+    public func contains(_ value: AEEncodable) -> TestClause {
+        return ComparisonTest(operatorType: .contains, operand1: self, operand2: value, app: app)
     }
 
-    public func isIn(_ value: Any) -> TestClause {
-        return ComparisonTest(operatorType: AE4.Descriptors.ContainmentTests.isIn, operand1: self, operand2: value, app: app)
+    public func isIn(_ value: AEEncodable) -> TestClause {
+        return ComparisonTest(operatorType: .isIn, operand1: self, operand2: value, app: app)
     }
     
 }
 
-public func <(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.lessThan, operand1: lhs, operand2: rhs, app: lhs.app)
+public func <(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .lessThan, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func <=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.lessThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
+public func <=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .lessThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func ==(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.equals, operand1: lhs, operand2: rhs, app: lhs.app)
+public func ==(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .equals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func !=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.notEquals, operand1: lhs, operand2: rhs, app: lhs.app)
+public func !=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .notEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func >(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.greaterThan, operand1: lhs, operand2: rhs, app: lhs.app)
+public func >(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .greaterThan, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
-public func >=(lhs: SingleObjectSpecifier, rhs: Any) -> TestClause {
-    return ComparisonTest(operatorType: AE4.Descriptors.ComparisonTests.greaterThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
+public func >=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
+    return ComparisonTest(operatorType: .greaterThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
 }
 
 public struct RangeSelector: AEEncodable { // holds data for by-range selectors
@@ -205,40 +186,49 @@ public struct RangeSelector: AEEncodable { // holds data for by-range selectors
     // long as they have the same parent specifier as the by-range specifier itself). For convenience, users can also
     // pass non-specifier values (typically Strings and Ints) to represent simple by-name and by-index specifiers of
     // the same element class; these will be converted to specifiers automatically when encoded.
-    public let start: Any
-    public let stop: Any
-    public let wantType: NSAppleEventDescriptor
+    public let start: AEEncodable
+    public let stop: AEEncodable
+    public let wantType: AE4.AEType
 
-    public init(start: Any, stop: Any, wantType: NSAppleEventDescriptor) {
+    public init(start: AEEncodable, stop: AEEncodable, wantType: AE4.AEType) {
         self.start = start
         self.stop = stop
         self.wantType = wantType
     }
 
-    private func encode(_ selectorData: Any, app: App) throws -> NSAppleEventDescriptor {
-        var selectorForm: NSAppleEventDescriptor
+    private func encode(_ selectorData: AEEncodable, app: App) throws -> AEDescriptor {
         switch selectorData {
-        case is NSAppleEventDescriptor:
-            return selectorData as! NSAppleEventDescriptor
+        case is AEDescriptor:
+            return selectorData as! AEDescriptor
         case is Specifier: // technically, only SingleObjectSpecifier makes sense here, tho AS prob. doesn't prevent insertion loc or multi-element specifier being passed instead
             return try (selectorData as! Specifier).encodeAEDescriptor(app)
         default: // encode anything else as a by-name or by-index specifier
-            selectorForm = selectorData is String ? AE4.Descriptors.IndexForms.name : AE4.Descriptors.IndexForms.absolutePosition
-            let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.objectSpecifier)!
-            desc.setDescriptor(containerRoot, forKeyword: AE4.ObjectSpecifierKeywords.container)
-            desc.setDescriptor(wantType, forKeyword: AE4.ObjectSpecifierKeywords.desiredClass)
-            desc.setDescriptor(selectorForm, forKeyword: AE4.ObjectSpecifierKeywords.keyForm)
-            desc.setDescriptor(try app.encode(selectorData), forKeyword: AE4.ObjectSpecifierKeywords.keyData)
-            return desc
+            let selectorForm: AE4.IndexForm = selectorData is String ? .name : .absolutePosition
+            return try AEDescriptor.objectSpecifier(container: AEDescriptor.containerRoot, type: wantType, form: selectorForm, data: selectorData, app: app)
         }
     }
 
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.rangeDescriptor)!
-        desc.setDescriptor(try encode(start, app: app), forKeyword: AE4.RangeSpecifierKeywords.start)
-        desc.setDescriptor(try encode(stop, app: app), forKeyword: AE4.RangeSpecifierKeywords.stop)
-        return desc
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        try .range(start: start, stop: stop, app: app)
     }
+    
+    public init?(from descriptor: AEDescriptor, wantType: AE4.AEType, app: App) throws {
+        guard descriptor.type == .rangeDescriptor else {
+            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Malformed selector in by-range specifier.")
+        }
+        guard
+            let startDesc = descriptor[AE4.RangeSpecifierKeywords.start],
+            let stopDesc = descriptor[AE4.RangeSpecifierKeywords.stop]
+        else {
+            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Malformed selector in by-range specifier.")
+        }
+        do {
+            self.init(start: try app.decode(startDesc), stop: try app.decode(stopDesc), wantType: wantType)
+        } catch {
+            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Couldn't decode start/stop selector in by-range specifier.")
+        }
+    }
+    
 }
 
 /// A test clause. Must descend from a `RootSpecifier` with kind `.specimen`.
@@ -246,15 +236,15 @@ public protocol TestClause: Query {
 }
 
 public func &&(lhs: TestClause, rhs: TestClause) -> TestClause {
-    return LogicalTest(operatorType: AE4.Descriptors.LogicalTests.and, operands: [lhs, rhs], app: lhs.app)
+    return LogicalTest(operatorType: .and, operands: [lhs, rhs], app: lhs.app)
 }
 
 public func ||(lhs: TestClause, rhs: TestClause) -> TestClause {
-    return LogicalTest(operatorType: AE4.Descriptors.LogicalTests.or, operands: [lhs, rhs], app: lhs.app)
+    return LogicalTest(operatorType: .or, operands: [lhs, rhs], app: lhs.app)
 }
 
 public prefix func !(op: TestClause) -> TestClause {
-    return LogicalTest(operatorType: AE4.Descriptors.LogicalTests.not, operands: [op], app: op.app)
+    return LogicalTest(operatorType: .not, operands: [op], app: op.app)
 }
 
 /// A comparison or containment test clause.
@@ -262,34 +252,23 @@ public class ComparisonTest: TestClause {
     
     public var app: App
     
-    public let operatorType: NSAppleEventDescriptor, operand1: SingleObjectSpecifier, operand2: Any
+    public let operatorType: AE4.Comparison, operand1: SingleObjectSpecifier, operand2: AEEncodable
     
-    init(operatorType: NSAppleEventDescriptor,
-         operand1: SingleObjectSpecifier, operand2: Any, app: App) {
+    init(operatorType: AE4.Comparison, operand1: SingleObjectSpecifier, operand2: AEEncodable, app: App) {
         self.operatorType = operatorType
         self.operand1 = operand1
         self.operand2 = operand2
         self.app = app
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        if operatorType === AE4.Descriptors.ComparisonTests.notEquals { // AEM doesn't support a 'kAENotEqual' enum...
-            return try (!(operand1 == operand2)).encodeAEDescriptor(app) // so convert to kAEEquals+kAENOT
-        } else {
-            let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: AE4.Types.compDescriptor)!
-            let opDesc1 = try app.encode(operand1)
-            let opDesc2 = try app.encode(operand2)
-            if operatorType === AE4.Descriptors.ContainmentTests.isIn { // AEM doesn't support a 'kAEIsIn' enum...
-                desc.setDescriptor(AE4.Descriptors.ContainmentTests.contains, forKeyword: AE4.TestPredicateKeywords.comparisonOperator) // so use kAEContains with operands reversed
-                desc.setDescriptor(opDesc2, forKeyword: AE4.TestPredicateKeywords.firstObject)
-                desc.setDescriptor(opDesc1, forKeyword: AE4.TestPredicateKeywords.secondObject)
-            } else {
-                desc.setDescriptor(operatorType, forKeyword: AE4.TestPredicateKeywords.comparisonOperator)
-                desc.setDescriptor(opDesc1, forKeyword: AE4.TestPredicateKeywords.firstObject)
-                desc.setDescriptor(opDesc2, forKeyword: AE4.TestPredicateKeywords.secondObject)
-            }
-            return desc
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        if operatorType == .notEquals {
+            return try (!(operand1 == operand2)).encodeAEDescriptor(app)
         }
+        if operatorType == .isIn {
+            return try .comparison(operator: .contains, lhs: operand2, rhs: operand1, app: app)
+        }
+        return try .comparison(operator: operatorType, lhs: operand1, rhs: operand2, app: app)
     }
     
     public var parentQuery: Query {
@@ -307,34 +286,30 @@ public class LogicalTest: TestClause {
     
     public var app: App
 
-    public let operatorType: NSAppleEventDescriptor
+    public let operatorType: AE4.LogicalOperator
     public let operands: [TestClause] // note: this doesn't have a 'parent' as such; to walk chain, just use first operand
 
-    init(operatorType: NSAppleEventDescriptor, operands: [TestClause], app: App) {
+    init(operatorType: AE4.LogicalOperator, operands: [TestClause], app: App) {
         self.operatorType = operatorType
         self.operands = operands
         self.app = app
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
-        let desc = NSAppleEventDescriptor.record().coerce(toDescriptorType: typeLogicalDescriptor)!
-        desc.setDescriptor(operatorType, forKeyword: AE4.TestPredicateKeywords.logicalOperator)
-        desc.setDescriptor(try app.encode(operands), forKeyword: AE4.TestPredicateKeywords.logicalTerms)
-        return desc
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        try .logical(operator: operatorType, operands: operands, app: app)
     }
     
     public var parentQuery: Query {
-        return operands[0]
+        operands[0]
     }
-
     public var rootSpecifier: RootSpecifier {
-        return operands[0].rootSpecifier
+        operands[0].rootSpecifier
     }
     
 }
 
 /// The root of all specifier chains.
-public class RootSpecifier: ObjectSpecifier {
+public final class RootSpecifier: Specifier {
     
     public var app: App
     
@@ -354,7 +329,7 @@ public class RootSpecifier: ObjectSpecifier {
         /// e.g., `item 1 of {1,2,3}`.
         /// (These sorts of descriptors are effectively exclusively generated
         /// by AppleScript).
-        case object(NSAppleEventDescriptor)
+        case object(AEDescriptor)
     }
     
     public var kind: Kind
@@ -364,21 +339,14 @@ public class RootSpecifier: ObjectSpecifier {
         self.app = app
     }
     
-    public var wantType: NSAppleEventDescriptor {
-        .null()
-    }
-    public var selectorForm: NSAppleEventDescriptor {
-        .null()
-    }
-    
-    public var selectorData: Any {
+    public var selectorData: AEEncodable {
         switch kind {
         case .application:
-            return applicationRoot
+            return AEDescriptor.appRoot
         case .container:
-            return containerRoot
+            return AEDescriptor.containerRoot
         case .specimen:
-            return specimenRoot
+            return AEDescriptor.specimenRoot
         case let .object(descriptor):
             return descriptor
         }
@@ -391,8 +359,21 @@ public class RootSpecifier: ObjectSpecifier {
         self
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
         try app.encode(selectorData)
+    }
+    
+    public convenience init(from descriptor: AEDescriptor, app: App) throws {
+        switch descriptor.type {
+        case .null:
+            self.init(.application, app: app)
+        case .currentContainer:
+            self.init(.container, app: app)
+        case .objectBeingExamined:
+            self.init(.specimen, app: app)
+        default:
+            self.init(.object(descriptor), app: app)
+        }
     }
     
 }

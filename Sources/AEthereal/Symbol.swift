@@ -1,31 +1,38 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-// Ian's notes: SA's method of representing ae4 codes.
-
 import Foundation
 
 public struct Symbol {
     
-    public let code: OSType
-    public let type: OSType
+    public let code: AE4
+    public let type: AE4.AEType
     
-    public init(code: OSType, type: OSType) {
+    public init(code: AE4, type: AE4.AEType) {
         self.code = code
         self.type = type
     }
     
 }
 
-// MARK: AEEncodable
-extension Symbol: AEEncodable {
+// MARK: AECodable
+extension Symbol: AECodable {
     
-    public func encodeAEDescriptor(_ app: App) throws -> NSAppleEventDescriptor {
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
         encodeAEDescriptor()
     }
     
-    public func encodeAEDescriptor() -> NSAppleEventDescriptor {
-        NSAppleEventDescriptor(type: type, code: code)
+    public func encodeAEDescriptor() -> AEDescriptor {
+        AEDescriptor(type: type, code: code)
+    }
+    
+    public init(from descriptor: AEDescriptor) {
+        self.code = descriptor.enumCodeValue
+        self.type = AE4.AEType(rawValue: descriptor.descriptorType)
+    }
+    
+    public init(from descriptor: AEDescriptor, app: App) {
+        self.init(from: descriptor)
     }
     
 }

@@ -6,7 +6,7 @@ import CoreGraphics.CGGeometry
 /// A value which is representable as an AppleEvent descriptor.
 public indirect enum AEValue {
     
-    case descriptor(NSAppleEventDescriptor)
+    case descriptor(AEDescriptor)
     
     case rootSpecifier(RootSpecifier)
     case objectSpecifier(SingleObjectSpecifier)
@@ -27,7 +27,7 @@ public indirect enum AEValue {
     case date(Date)
     
     case list([AEValue])
-    case record([Symbol : AEValue])
+    case record([AE4 : AEValue])
     
     case fileURL(URL)
     
@@ -148,6 +148,41 @@ extension AEValue: CustomStringConvertible {
             return "\(object)"
         case .missingValue:
             return "missing value"
+        }
+    }
+    
+}
+
+extension AEValue: AEEncodable {
+    
+    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+        switch self {
+        case let .descriptor(descriptor):
+            return descriptor
+        case let .rootSpecifier(object as AEEncodable),
+             let .objectSpecifier(object as AEEncodable),
+             let .insertionSpecifier(object as AEEncodable),
+             let .comparisonTest(object as AEEncodable),
+             let .logicalTest(object as AEEncodable),
+             let .symbol(object as AEEncodable),
+             let .bool(object as AEEncodable),
+             let .int32(object as AEEncodable),
+             let .int64(object as AEEncodable),
+             let .uint64(object as AEEncodable),
+             let .double(object as AEEncodable),
+             let .string(object as AEEncodable),
+             let .date(object as AEEncodable),
+             let .fileURL(object as AEEncodable),
+             let .point(object as AEEncodable),
+             let .rect(object as AEEncodable),
+             let .color(object as AEEncodable):
+            return try object.encodeAEDescriptor(app)
+        case let .list(list):
+            return try list.encodeAEDescriptor(app)
+        case let .record(record):
+            return try record.encodeAEDescriptor(app)
+        case .missingValue:
+            return missingValueDesc
         }
     }
     

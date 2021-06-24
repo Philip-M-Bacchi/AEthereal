@@ -19,11 +19,11 @@ extension App {
         defer {
             _transactionLock.unlock()
         }
-        assert(self._transactionID == AE4.anyTransactionID, "Transaction \(self._transactionID) already active.")
+        assert(self._transactionID == .any, "Transaction \(self._transactionID) already active.")
         
         self._transactionID = try beginTransaction()
         defer {
-            self._transactionID = AE4.anyTransactionID
+            self._transactionID = .any
         }
         
         do {

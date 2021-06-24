@@ -53,7 +53,7 @@ var errStream = StderrStream()
 extension FourCharCode {
     
     public init(fourByteString string: String) throws {
-        // convert four-character string containing MacOSRoman characters to OSType
+        // convert four-character string containing MacOSRoman characters to AE4
         // (this is safer than using UTGetOSTypeFromString, which silently fails if string is malformed)
         guard let data = string.data(using: .macOSRoman) else {
             throw AutomationError(code: 1, message: "Invalid four-char code (bad encoding): \(string.debugDescription)")
@@ -70,27 +70,14 @@ extension FourCharCode {
 extension String {
     
     public init(fourCharCode: FourCharCode) {
-        // convert an OSType to four-character string containing MacOSRoman characters
+        // convert an AE4 to four-character string containing MacOSRoman characters
         self.init(UTCreateStringForOSType(fourCharCode).takeRetainedValue() as String)
     }
     
 }
 
-public func eightCharCode(_ eventClass: OSType, _ eventID: OSType) -> UInt64 {
+public func eightCharCode(_ eventClass: AE4, _ eventID: AE4) -> UInt64 {
     return UInt64(eventClass) << 32 | UInt64(eventID)
-}
-
-extension NSAppleEventDescriptor {
-    
-    convenience init(type: OSType, code: OSType) {
-        var data = code
-        self.init(descriptorType: type, bytes: &data, length: MemoryLayout<OSType>.size)!
-    }
-    
-    convenience init(uint32 data: UInt32) {
-        var data = data
-        self.init(descriptorType: AE4.Types.uInt32, bytes: &data, length: MemoryLayout<UInt32>.size)!
-    }
 }
 
 // the following AEDesc types will be mapped to Symbol instances
@@ -98,7 +85,7 @@ let symbolDescriptorTypes: Set<DescType> = [typeType, typeEnumerated, typeProper
 
 /******************************************************************************/
 
-public typealias SendOptions = NSAppleEventDescriptor.SendOptions
+public typealias SendOptions = AEDescriptor.SendOptions
 
 /******************************************************************************/
 // launch and relaunch options used in Application initializers
@@ -126,14 +113,3 @@ public let NoParameter = OptionalParameter.none
 func parameterExists(_ value: Any) -> Bool {
     return value as? OptionalParameter != NoParameter
 }
-
-/******************************************************************************/
-// Apple event descriptors used to terminate nested AERecord (of typeObjectSpecifier, etc) chains
-
-public let applicationRoot = NSAppleEventDescriptor.null()
-
-public let containerRoot = NSAppleEventDescriptor(descriptorType: typeCurrentContainer, data: nil)!
-
-// root descriptor for an object specifier describing an element whose state is being compared in a by-test specifier
-// e.g. `every track where (rating of «typeObjectBeingExamined» > 50)`
-public let specimenRoot = NSAppleEventDescriptor(descriptorType: typeObjectBeingExamined, data: nil)!

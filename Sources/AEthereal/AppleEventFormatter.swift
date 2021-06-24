@@ -18,10 +18,10 @@ public enum TerminologyType {
     case none // use default terminology + raw four-char codes only
 }
 
-public func formatAppleEvent(descriptor event: NSAppleEventDescriptor, useTerminology: TerminologyType = .sdef) -> String { // TO DO: return command/reply/error enum, giving caller more choice on how to display
+public func formatAppleEvent(descriptor event: AEDescriptor, useTerminology: TerminologyType = .sdef) -> String { // TO DO: return command/reply/error enum, giving caller more choice on how to display
     //  Format an outgoing or reply AppleEvent (if the latter, only the return value/error description is displayed).
     //  Caution: if sending events to self, caller MUST use TerminologyType.SDEF or call formatAppleEvent on a background thread, otherwise formatAppleEvent will deadlock the main loop when it tries to fetch host app's AETE via ascr/gdte event.
-    if event.descriptorType != AE4.Types.appleEvent { // sanity check
+    if event.type != .appleEvent { // sanity check
         return "Can't format Apple event: wrong type: \(formatFourCharCodeString(event.descriptorType))."
     }
     if
@@ -33,9 +33,9 @@ public func formatAppleEvent(descriptor event: NSAppleEventDescriptor, useTermin
             let errs = event.paramDescriptor(forKeyword: AE4.Keywords.errorString)?.stringValue
             return AutomationError(code: Int(errn), message: errs).errorDescription! // TO DO: use CommandError? (need to check it's happy with only replyEvent arg)
         } else if let reply = event.paramDescriptor(forKeyword: AE4.Keywords.directObject) { // format return value
-            return formatSAObject((try? App().decode(reply)) ?? reply)
+            return formatAEtherealObject((try? App().decode(reply)) ?? reply)
         } else {
-            return MissingValue.description
+            return "missing value"
         }
     } else { // fully format outgoing event
         return event.description
@@ -50,7 +50,7 @@ public struct CommandDescription {
     // note: even when terminology data is available, there's still no guarantee that a command won't have to use raw codes instead (typically due to dodgy terminology; while AS allows mixing of keyword and raw chevron syntax in the same command, it's such a rare defect it's best to stick solely to one or the other)
     public enum Signature {
         case named(name: String, directParameter: Any, keywordParameters: [(String, Any)], requestedType: Symbol?)
-        case codes(eventClass: OSType, eventID: OSType, parameters: [OSType:Any])
+        case codes(eventClass: AE4, eventID: AE4, parameters: [AE4:Any])
     }
     
     // name and parameters
@@ -65,10 +65,10 @@ public struct CommandDescription {
     public private(set) var ignoring: Considerations = [.case]
     
     // called by sendAppleEvent with a failed command's details
-    public init(eventClass: OSType, eventID: OSType, parentSpecifier: Any?,
+    public init(eventClass: AE4, eventID: AE4, parentSpecifier: Any?,
                 directParameter: Any, keywordParameters: [KeywordParameter],
                 requestedType: Symbol?, waitReply: Bool, withTimeout: TimeInterval?, considering: Considerations?, ignoring: Considerations?) {
-        var parameters = [OSType:Any]()
+        var parameters = [AE4:Any]()
         if parameterExists(directParameter) { parameters[AE4.Keywords.directObject] = directParameter }
         for (code, value) in keywordParameters where parameterExists(value) { parameters[code] = value }
         if let symbol = requestedType { parameters[AE4.Keywords.requestedType] = symbol }

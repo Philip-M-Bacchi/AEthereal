@@ -190,9 +190,9 @@ public class EncodeError: AutomationError {
 public class DecodeError: AutomationError {
     
     let type: Any.Type
-    let descriptor: NSAppleEventDescriptor
+    let descriptor: AEDescriptor
     
-    public init(descriptor: NSAppleEventDescriptor, type: Any.Type, message: String? = nil, cause: Error? = nil) {
+    public init(descriptor: AEDescriptor, type: Any.Type, message: String? = nil, cause: Error? = nil) {
         self.descriptor = descriptor
         self.type = type
         super.init(code: decodeErrorCode, message: message, cause: cause)
@@ -232,11 +232,11 @@ public class CommandError: AutomationError { // raised whenever an application c
     
     let commandInfo: CommandDescription // TO DO: this should always be given
     let app: App
-    let event: NSAppleEventDescriptor? // non-nil if event was built and send
-    let reply: NSAppleEventDescriptor? // non-nil if reply event was received
+    let event: AEDescriptor? // non-nil if event was built and send
+    let reply: AEDescriptor? // non-nil if reply event was received
     
     public init(commandInfo: CommandDescription, app: App,
-         event: NSAppleEventDescriptor? = nil, reply: NSAppleEventDescriptor? = nil, cause: Error? = nil) {
+         event: AEDescriptor? = nil, reply: AEDescriptor? = nil, cause: Error? = nil) {
         self.app = app
         self.event = event
         self.reply = reply

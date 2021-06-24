@@ -8,7 +8,7 @@ private let processNotFoundErrorNumbers: Set<Int> = [procNotFound, connectionInv
 
 private let launchEventSucceededErrorNumbers: Set<Int> = [Int(noErr), errAEEventNotHandled]
 
-private let untargetedLaunchEvent = NSAppleEventDescriptor(eventClass: AE4.Events.AppleScript.eventClass, eventID: AE4.Events.AppleScript.IDs.launch, targetDescriptor: NSAppleEventDescriptor.null(), returnID: AE4.autoGenerateReturnID, transactionID: AE4.anyTransactionID)
+private let untargetedLaunchEvent = AEDescriptor(eventClass: AE4.Events.AppleScript.eventClass, eventID: AE4.Events.AppleScript.IDs.launch, target: .appRoot)
 
 /// A target that can receive AppleEvents.
 public enum AETarget: CustomStringConvertible {
@@ -18,7 +18,7 @@ public enum AETarget: CustomStringConvertible {
     case url(URL) // "file" or "eppc" URL
     case bundleIdentifier(String)
     case processIdentifier(pid_t)
-    case descriptor(NSAppleEventDescriptor) // AEAddressDesc
+    case descriptor(AEDescriptor) // AEAddressDesc
     case none // used in untargeted App instances; sendAppleEvent() will raise ConnectionError if called
     
     public var description: String {
@@ -68,33 +68,31 @@ public enum AETarget: CustomStringConvertible {
         return nil
     }
     
-    private func sendLaunchEvent(processDescriptor: NSAppleEventDescriptor) -> Int {
+    private func sendLaunchEvent(processDescriptor: AEDescriptor) -> Int {
         do {
-            let event = NSAppleEventDescriptor(eventClass: AE4.Events.AppleScript.eventClass, eventID: AE4.Events.AppleScript.IDs.launch,
-                                               targetDescriptor: processDescriptor, returnID: AE4.autoGenerateReturnID,
-                                               transactionID: AE4.anyTransactionID)
+            let event = AEDescriptor(eventClass: AE4.Events.AppleScript.eventClass, eventID: AE4.Events.AppleScript.IDs.launch, target: processDescriptor)
             let reply = try event.sendEvent(options: .waitForReply, timeout: 30)
-            return Int(reply.paramDescriptor(forKeyword: keyErrorNumber)?.int32Value ?? 0) // application error (errAEEventNotHandled is normal)
+            return Int(reply[keyErrorNumber]?.int32Value ?? 0) // application error (errAEEventNotHandled is normal)
         } catch {
             return (error as Error)._code // AEM error
         }
     }
     
-    private func processDescriptorForLocalApplication(url: URL, launchOptions: LaunchOptions) throws -> NSAppleEventDescriptor {
+    private func processDescriptorForLocalApplication(url: URL, launchOptions: LaunchOptions) throws -> AEDescriptor {
         // get a typeKernelProcessID-based AEAddressDesc for the target app, finding and launch it first if not already running;
         // if app can't be found/launched, throws a ConnectionError/NSError instead
         let runningProcess = try (self.localRunningApplication(url: url) ??
             NSWorkspace.shared.launchApplication(at: url, options: launchOptions, configuration: [:]))
-        return NSAppleEventDescriptor(processIdentifier: runningProcess.processIdentifier)
+        return AEDescriptor(processIdentifier: runningProcess.processIdentifier)
     }
     
-    private func isRunning(processDescriptor: NSAppleEventDescriptor) -> Bool {
+    private func isRunning(processDescriptor: AEDescriptor) -> Bool {
         // check if process is running by sending it a 'noop' event; used by isRunning property
         // this assumes app is running unless it receives an AEM error that explicitly indicates it isn't (a bit crude, but when the only identifying information for the target process is an arbitrary AEAddressDesc there isn't really a better way to check if it's running other than send it an event and see what happens)
         return !processNotFoundErrorNumbers.contains(self.sendLaunchEvent(processDescriptor: processDescriptor))
     }
     
-    private func bundleIdentifier(processDescriptor: NSAppleEventDescriptor) -> String? {
+    private func bundleIdentifier(processDescriptor: AEDescriptor) -> String? {
         switch try? RootSpecifier(addressDescriptor: processDescriptor).property(pID).get() {
         case let .string(id):
             return id
@@ -130,7 +128,7 @@ public enum AETarget: CustomStringConvertible {
             if url.isFileURL {
                 return (((try? self.localRunningApplication(url: url)) as NSRunningApplication??)) != nil
             } else if url.scheme == "eppc" {
-                return self.isRunning(processDescriptor: NSAppleEventDescriptor(applicationURL: url))
+                return self.isRunning(processDescriptor: AEDescriptor(applicationURL: url))
             }
         case .bundleIdentifier(let bundleID):
             return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).count > 0
@@ -155,7 +153,7 @@ public enum AETarget: CustomStringConvertible {
             if url.isFileURL {
                 return Bundle(url: url)?.bundleIdentifier
             } else if url.scheme == "eppc" {
-                return bundleIdentifier(processDescriptor: NSAppleEventDescriptor(applicationURL: url))
+                return bundleIdentifier(processDescriptor: AEDescriptor(applicationURL: url))
             } else {
                 return nil
             }
@@ -206,16 +204,16 @@ public enum AETarget: CustomStringConvertible {
         try NSWorkspace.shared.launchApplication(at: url, options: [.withoutActivation], configuration: [.appleEvent: untargetedLaunchEvent])
     }
     
-    /// Makes an `NSAppleEventDescriptor` for this target, if possible.
+    /// Makes an `AEDescriptor` for this target, if possible.
     ///
     /// If the target is relaunchable and not currently running,
     /// it will be launched.
     /// If the target is `.current`, the result will be `.currentProcess()`.
     /// If the target is local to this machine, the result will refer to a PID.
-    public func descriptor(_ launchOptions: LaunchOptions = DefaultLaunchOptions) throws -> NSAppleEventDescriptor? {
+    public func descriptor(_ launchOptions: LaunchOptions = DefaultLaunchOptions) throws -> AEDescriptor? {
         switch self {
         case .current:
-            return NSAppleEventDescriptor.currentProcess()
+            return AEDescriptor.currentProcess()
         case .name(let name): // app name or full path
             guard let url = fileURLForLocalApplication(name) else {
                 throw ConnectionError(target: self, message: "Application not found: \(name)")
@@ -225,7 +223,7 @@ public enum AETarget: CustomStringConvertible {
             if url.isFileURL {
                 return try self.processDescriptorForLocalApplication(url: url, launchOptions: launchOptions)
             } else if url.scheme == "eppc" {
-                return NSAppleEventDescriptor(applicationURL: url)
+                return AEDescriptor(applicationURL: url)
             } else {
                 throw ConnectionError(target: self, message: "Invalid URL scheme (not file/eppc): \(url)")
             }
@@ -233,12 +231,12 @@ public enum AETarget: CustomStringConvertible {
             do {
                 let runningProcess = try NSWorkspace.shared.launchApplication(withBundleIdentifier: bundleID,
                                                                                 options: launchOptions, configuration: [:])
-                return NSAppleEventDescriptor(processIdentifier: runningProcess.processIdentifier)
+                return AEDescriptor(processIdentifier: runningProcess.processIdentifier)
             } catch {
                 throw ConnectionError(target: self, message: "Can't find/launch application: \(bundleID)", cause: error)
             }
         case .processIdentifier(let pid):
-            return NSAppleEventDescriptor(processIdentifier: pid)
+            return AEDescriptor(processIdentifier: pid)
         case .descriptor(let desc):
             return desc
         case .none:

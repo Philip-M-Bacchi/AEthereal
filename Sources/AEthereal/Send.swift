@@ -8,14 +8,14 @@ import Foundation
 private let launchOptions: LaunchOptions = DefaultLaunchOptions
 private let relaunchMode: RelaunchMode = DefaultRelaunchMode
 
-let defaultTimeout: TimeInterval = 120 // bug workaround: NSAppleEventDescriptor.sendEvent(options:timeout:) method's support for kAEDefaultTimeout=-1 and kNoTimeOut=-2 flags is buggy <rdar://21477694>, so for now the default timeout is hardcoded here as 120sec (same as in AS)
+let defaultTimeout: TimeInterval = 120 // bug workaround: AEDescriptor.sendEvent(options:timeout:) method's support for kAEDefaultTimeout=-1 and kNoTimeOut=-2 flags is buggy <rdar://21477694>, so for now the default timeout is hardcoded here as 120sec (same as in AS)
 
 // if target process is no longer running, Apple Event Manager will return an error when an event is sent to it
 private let RelaunchableErrorCodes: Set<Int> = [-600, -609]
 // if relaunchMode = .limited, only 'launch' and 'run' are allowed to restart a local application that's been quit
-private let LimitedRelaunchEvents: [(OSType,OSType)] = [(AE4.Events.Core.eventClass, AE4.Events.Core.IDs.openApplication), (AE4.Events.AppleScript.eventClass, AE4.Events.AppleScript.IDs.launch)]
+private let LimitedRelaunchEvents: [(AE4,AE4)] = [(AE4.Events.Core.eventClass, AE4.Events.Core.IDs.openApplication), (AE4.Events.AppleScript.eventClass, AE4.Events.AppleScript.IDs.launch)]
 
-public typealias KeywordParameter = (code: OSType, value: Any)
+public typealias KeywordParameter = (code: AE4, value: Any)
 
 // MARK: Apple event sending
 extension App {
@@ -24,10 +24,10 @@ extension App {
     /// given options.
     @discardableResult
     public func sendAppleEvent(
-        eventClass: OSType,
-        eventID: OSType,
+        eventClass: AE4,
+        eventID: AE4,
         targetSpecifier: Specifier,
-        parameters: [OSType:Any] = [:],
+        parameters: [AE4:Any] = [:],
         requestedType: Symbol? = nil,
         waitReply: Bool = true,
         sendOptions: SendOptions? = nil,
@@ -57,8 +57,8 @@ extension App {
     /// given options.
     @discardableResult
     public func sendAppleEvent(
-        eventClass: OSType,
-        eventID: OSType,
+        eventClass: AE4,
+        eventID: AE4,
         targetSpecifier: Specifier, // the Specifier on which the command method was called; see special-case encoding logic below
         directParameter: Any = NoParameter, // the first (unnamed) parameter to the command method; see special-case encoding logic below
         keywordParameters: [KeywordParameter] = [], // the remaining named parameters
@@ -72,10 +72,10 @@ extension App {
     {
         // note: human-readable command and parameter names are only used (if known) in error messages
         // note: all errors occurring within this method are caught and rethrown as CommandError, allowing error message to provide a description of the failed command as well as the error itself
-        var sentEvent: NSAppleEventDescriptor?, repliedEvent: NSAppleEventDescriptor?
+        var sentEvent: AEDescriptor?, repliedEvent: AEDescriptor?
         do {
             // Create a new AppleEvent descriptor (throws ConnectionError if target app isn't found)
-            let event = NSAppleEventDescriptor(eventClass: eventClass, eventID: eventID, targetDescriptor: try self.targetDescriptor(), returnID: AE4.autoGenerateReturnID, transactionID: AE4.anyTransactionID)
+            let event = AEDescriptor(eventClass: eventClass, eventID: eventID, target: try self.targetDescriptor())
             // encode its keyword parameters
             for (code, value) in keywordParameters where parameterExists(value) {
                 do {
@@ -87,23 +87,23 @@ extension App {
             
             let hasDirectParameter = parameterExists(directParameter)
             if hasDirectParameter {
-                event.setParam(try self.encode(directParameter), forKeyword: AE4.Keywords.directObject)
+                event[AE4.Keywords.directObject] = try self.encode(directParameter)
             }
             
-            var subject = applicationRoot
+            var subject = AEDescriptor.appRoot
             if !(targetSpecifier is RootSpecifier) { // technically Application, but there isn't an explicit class for that
                 if eventClass == AE4.Suites.coreSuite && eventID == AE4.AESymbols.createElement { // for user's convenience, `make` command is treated as a special case
                     // if `make` command is called on a specifier, use that specifier as event's `at` parameter if not already given
-                    if event.paramDescriptor(forKeyword: AE4.Keywords.insertHere) != nil { // an `at` parameter was already given, so encode parent specifier as event's subject attribute
+                    if event[AE4.Keywords.insertHere] != nil { // an `at` parameter was already given, so encode parent specifier as event's subject attribute
                         subject = try self.encode(targetSpecifier)
                     } else { // else encode parent specifier as event's `at` parameter and use null as event's subject attribute
-                        event.setParam(try self.encode(targetSpecifier), forKeyword: AE4.Keywords.insertHere)
+                        event[AE4.Keywords.insertHere] = try self.encode(targetSpecifier)
                     }
                 } else { // for all other commands, check if a direct parameter was already given
                     if hasDirectParameter { // encode the parent specifier as the event's subject attribute
                         subject = try self.encode(targetSpecifier)
                     } else { // else encode parent specifier as event's direct parameter and use null as event's subject attribute
-                        event.setParam(try self.encode(targetSpecifier), forKeyword: AE4.Keywords.directObject)
+                        event[AE4.Keywords.directObject] = try self.encode(targetSpecifier)
                     }
                 }
             }
@@ -111,7 +111,7 @@ extension App {
             
             // encode requested type (`as`) parameter, if specified; note: most apps ignore this, but a few may recognize it (usually in `get` commands)  even if they don't define it in their dictionary (another AppleScript-introduced quirk); e.g. `Finder().home.get(requestedType:FIN.alias) as URL` tells Finder to return a typeAlias descriptor instead of typeObjectSpecifier, which can then be decoded as URL
             if let type = requestedType {
-                event.setDescriptor(NSAppleEventDescriptor(typeCode: type.code), forKeyword: AE4.Keywords.requestedType)
+                event[AE4.Keywords.requestedType] = AEDescriptor(typeCode: type.code)
             }
             
             // note: most apps ignore considering/ignoring attributes, and always ignore case and consider everything else
@@ -121,7 +121,7 @@ extension App {
             // send the event
             let sendMode: SendOptions = [.alwaysInteract, .waitForReply] //sendOptions ?? defaultSendMode.union(waitReply ? .waitForReply : .noReply)
             let timeout = timeout ?? defaultTimeout
-            var replyEvent: NSAppleEventDescriptor
+            var replyEvent: AEDescriptor
             sentEvent = event
             do {
                 replyEvent = try self.send(event: event, sendMode: sendMode, timeout: timeout) // throws NSError on AEM error
@@ -130,8 +130,7 @@ extension App {
                         || (relaunchMode == .limited && LimitedRelaunchEvents.contains(where: {$0.0 == eventClass && $0.1 == eventID}))) {
                     // event failed as target process has quit since previous event; recreate AppleEvent with new address and resend
                     self._targetDescriptor = nil
-                    let event2 = NSAppleEventDescriptor(eventClass: eventClass, eventID: eventID, targetDescriptor: try self.targetDescriptor(),
-                                                        returnID: AE4.autoGenerateReturnID, transactionID: AE4.anyTransactionID)
+                    let event2 = AEDescriptor(eventClass: eventClass, eventID: eventID, target: try self.targetDescriptor())
                     let count = event.numberOfItems
                     if count > 0 {
                         for i in 1...count {
@@ -181,7 +180,7 @@ extension App {
         }
     }
     
-    private func send(event: NSAppleEventDescriptor, sendMode: SendOptions, timeout: TimeInterval) throws -> NSAppleEventDescriptor {
+    private func send(event: AEDescriptor, sendMode: SendOptions, timeout: TimeInterval) throws -> AEDescriptor {
         do {
             return try event.sendEvent(options: sendMode, timeout: timeout) // throws NSError on AEM errors (but not app errors)
         } catch {
@@ -193,7 +192,7 @@ extension App {
                 event.attributeDescriptor(forKeyword: AE4.Attributes.eventID)!.typeCodeValue == AE4.Events.AppleScript.IDs.launch
             {
                 // not a full AppleEvent desc, but reply event's attributes aren't used so is equivalent to a reply event containing neither error nor result
-                    return NSAppleEventDescriptor.record()
+                    return AEDescriptor.record()
             } else {
                 throw error
             }
@@ -205,7 +204,7 @@ extension App {
 // MARK: Target encoding
 extension App {
     
-    public func targetDescriptor() throws -> NSAppleEventDescriptor? {
+    public func targetDescriptor() throws -> AEDescriptor? {
         if _targetDescriptor == nil {
             _targetDescriptor = try target.descriptor(launchOptions)
         }
@@ -220,9 +219,9 @@ extension Specifier {
     /// the target specifier, and with the (many available) given options.
     @discardableResult
     public func sendAppleEvent(
-        _ eventClass: OSType,
-        _ eventID: OSType,
-        _ parameters: [OSType : Any] = [:],
+        _ eventClass: AE4,
+        _ eventID: AE4,
+        _ parameters: [AE4 : Any] = [:],
         requestedType: Symbol? = nil,
         waitReply: Bool = true,
         sendOptions: SendOptions? = nil,

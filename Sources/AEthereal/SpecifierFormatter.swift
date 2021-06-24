@@ -23,7 +23,7 @@ import AppKit
 // used by a Specifier's description property to render Swift literal representation of itself;
 // static glues instantiate this with their own application-specific code->name translation tables
 
-public func formatSAObject(_ object: Any) -> String {
+public func formatAEtherealObject(_ object: Any) -> String {
     switch object {
     case let obj as RootSpecifier:
         return formatRootSpecifier(obj)
@@ -36,28 +36,10 @@ public func formatSAObject(_ object: Any) -> String {
     case let obj as LogicalTest:
         return formatLogicalTest(obj)
     case let obj as Symbol:
-        return formatSymbol(obj)
+        return "Symbol(code:\(formatFourCharCodeString(obj.code)), type:\(formatFourCharCodeString(obj.type.rawValue)))"
     default:
         return formatValue(object)
     }
-}
-
-// hooks
-
-func formatSymbol(_ symbol: Symbol) -> String {
-    return formatSymbol(code: symbol.code, type: symbol.type)
-}
-
-func formatSymbol(code: OSType, type: OSType) -> String {
-    "Symbol(code:\(formatFourCharCodeString(code)), type:\(formatFourCharCodeString(type)))"
-}
-
-func formatPropertyVar(_ code: OSType) -> String {
-    ".property(\(formatFourCharCodeString(code)))"
-}
-
-func formatElementsVar(_ code: OSType) -> String {
-    ".elements(\(formatFourCharCodeString(code)))"
 }
 
 // Specifier formatters
@@ -72,11 +54,11 @@ func formatRootSpecifier(_ specifier: RootSpecifier) -> String {
         case .current:
             result += ".currentApplication()"
         case .name(let name):
-            result += "(name: \(formatSAObject(name)))"
+            result += "(name: \(formatAEtherealObject(name)))"
         case .url(let url):
-            result += url.isFileURL ? "(name: \(formatSAObject(url.path)))" : "(url: \(formatSAObject(url)))"
+            result += url.isFileURL ? "(name: \(formatAEtherealObject(url.path)))" : "(url: \(formatAEtherealObject(url)))"
         case .bundleIdentifier(let bundleID):
-            result += "(bundleIdentifier: \(formatSAObject(bundleID)))"
+            result += "(bundleIdentifier: \(formatAEtherealObject(bundleID)))"
         case .processIdentifier(let pid):
             result += "(processIdentifier: \(pid))"
         case .descriptor(let desc):
@@ -94,7 +76,7 @@ func formatRootSpecifier(_ specifier: RootSpecifier) -> String {
 
 func formatInsertionSpecifier(_ specifier: InsertionSpecifier) -> String {
     if let name: String = {
-        switch AE4.InsertionLocation(rawValue: specifier.insertionLocation.enumCodeValue) {
+        switch specifier.insertionLocation {
         case .beginning:
             return "beginning"
         case .end:
@@ -103,48 +85,45 @@ func formatInsertionSpecifier(_ specifier: InsertionSpecifier) -> String {
             return "before"
         case .after:
             return "after"
-        case nil:
-            return nil
         }
     }() {
-        return "\(formatSAObject(specifier.parentQuery)).\(name)"
+        return "\(formatAEtherealObject(specifier.parentQuery)).\(name)"
     }
-    return "<\(type(of: specifier))(kpos:\(specifier.insertionLocation),kobj:\(formatSAObject(specifier.parentQuery)))>"
+    return "<\(type(of: specifier))(kpos:\(specifier.insertionLocation),kobj:\(formatAEtherealObject(specifier.parentQuery)))>"
 }
 
 func formatObjectSpecifier(_ specifier: SingleObjectSpecifier) -> String {
-    let form = specifier.selectorForm.enumCodeValue
-    var result = formatSAObject(specifier.parentQuery)
-    switch AE4.IndexForm(rawValue: form) {
+    var result = formatAEtherealObject(specifier.parentQuery)
+    switch specifier.selectorForm {
     case .propertyID:
         // kludge, seld is either desc or symbol, depending on whether constructed or deocded; TO DO: eliminate?
-        if let desc = specifier.selectorData as? NSAppleEventDescriptor, let propertyDesc = desc.coerce(toDescriptorType: AE4.Types.type) {
-            return result + formatPropertyVar(propertyDesc.typeCodeValue)
+        if let desc = specifier.selectorData as? AEDescriptor, let propertyDesc = desc.coerce(to: .type) {
+            return result + ".property(\(formatFourCharCodeString(propertyDesc.typeCodeValue)))"
         } else if let symbol = specifier.selectorData as? Symbol {
-            return result + formatPropertyVar(symbol.code)
+            return result + ".property(\(formatFourCharCodeString(symbol.code)))"
         } // else malformed desc
     case .userPropertyID:
         return "\(result).userProperty(\(formatValue(specifier.selectorData)))"
     case .relativePosition: // specifier.previous/next(SYMBOL)
-        if let seld = specifier.selectorData as? NSAppleEventDescriptor, // ObjectSpecifier's self-decoding does not decode ordinals
+        if let seld = specifier.selectorData as? AEDescriptor, // ObjectSpecifier's self-decoding does not decode ordinals
                 let name = [AE4.RelativeOrdinal.previous.rawValue: "previous", AE4.RelativeOrdinal.next.rawValue: "next"][seld.enumCodeValue],
                 let parent = specifier.parentQuery as? SingleObjectSpecifier {
-            if specifier.wantType.typeCodeValue == parent.wantType.typeCodeValue {
+            if specifier.wantType == parent.wantType {
                 return "\(result).\(name)()" // use shorthand form for neatness
             } else {
-                let element = formatSymbol(code: specifier.wantType.typeCodeValue, type: typeType)
+                let element = "Symbol(code:\(formatFourCharCodeString(specifier.wantType.rawValue)), type:\(AE4.AEType.type.rawValue)))"
                 return "\(result).\(name)(\(element))"
             }
         }
     default:
-        result += formatElementsVar(specifier.wantType.typeCodeValue)
-        if let desc = specifier.selectorData as? NSAppleEventDescriptor, desc.typeCodeValue == AE4.AbsoluteOrdinal.all.rawValue {
+        result += ".elements(\(formatFourCharCodeString(specifier.wantType.rawValue)))"
+        if let desc = specifier.selectorData as? AEDescriptor, desc.typeCodeValue == AE4.AbsoluteOrdinal.all.rawValue {
             return result
         }
-        switch AE4.IndexForm(rawValue: form) {
+        switch specifier.selectorForm {
         case .absolutePosition: // specifier[IDX] or specifier.first/middle/last/any
             if
-                let desc = specifier.selectorData as? NSAppleEventDescriptor, // ObjectSpecifier's self-decoding does not decode ordinals
+                let desc = specifier.selectorData as? AEDescriptor, // ObjectSpecifier's self-decoding does not decode ordinals
                 let ordinal: String = {
                     switch AE4.AbsoluteOrdinal(rawValue: desc.enumCodeValue) {
                     case .first:
@@ -168,52 +147,43 @@ func formatObjectSpecifier(_ specifier: SingleObjectSpecifier) -> String {
             return specifier.selectorData is Int ? "\(result).named(\(formatValue(specifier.selectorData)))"
                                                  : "\(result)[\(formatValue(specifier.selectorData))]"
         case .uniqueID: // specifier.ID(UID)
-            return "\(result).ID(\(formatSAObject(specifier.selectorData)))"
+            return "\(result).ID(\(formatAEtherealObject(specifier.selectorData)))"
         case .range: // specifier[FROM,TO]
             if let seld = specifier.selectorData as? RangeSelector {
-                return "\(result)[\(formatSAObject(seld.start)), \(formatSAObject(seld.stop))]" // TO DO: app-based specifiers should use untargeted 'App' root; con-based specifiers should be reduced to minimal representation if their wantType == specifier.wantType
+                return "\(result)[\(formatAEtherealObject(seld.start)), \(formatAEtherealObject(seld.stop))]" // TO DO: app-based specifiers should use untargeted 'App' root; con-based specifiers should be reduced to minimal representation if their wantType == specifier.wantType
             }
         case .test: // specifier[TEST]
-            return "\(result)[\(formatSAObject(specifier.selectorData))]"
+            return "\(result)[\(formatAEtherealObject(specifier.selectorData))]"
         default:
             break
         }
     }
-    return "<\(type(of: specifier))(want:\(specifier.wantType),form:\(specifier.selectorForm),seld:\(formatValue(specifier.selectorData)),from:\(formatSAObject(specifier.parentQuery)))>"
+    return "<\(type(of: specifier))(want:\(specifier.wantType),form:\(specifier.selectorForm),seld:\(formatValue(specifier.selectorData)),from:\(formatAEtherealObject(specifier.parentQuery)))>"
 }
 
 private let _comparisonOperators = [AE4.Comparison.lessThan: "<", AE4.Comparison.lessThanEquals: "<=", AE4.Comparison.equals: "==",
-                                    AE4.Comparison.greaterThan: ">", AE4.Comparison.greaterThanEquals: ">="]
-private let _containmentOperators = [AE4.Containment.beginsWith: "beginsWith", AE4.Containment.endsWith: "endsWith", AE4.Containment.contains: "contains"]
+                                    AE4.Comparison.greaterThan: ">", AE4.Comparison.greaterThanEquals: ">=", AE4.Comparison.beginsWith: "beginsWith", AE4.Comparison.endsWith: "endsWith", AE4.Comparison.contains: "contains"]
 private let _logicalBinaryOperators = [AE4.LogicalOperator.and: "and", AE4.LogicalOperator.or: "or"]
 private let _logicalUnaryOperators = [AE4.LogicalOperator.not: "not"]
 
 func formatComparisonTest(_ specifier: ComparisonTest) -> String {
-    let operand1 = formatValue(specifier.operand1), operand2 = formatValue(specifier.operand2)
-    let opcode = specifier.operatorType.enumCodeValue
-    if
-        let comparison = AE4.Comparison(rawValue: opcode),
-        let name = _comparisonOperators[comparison]
-    {
+    let operand1 = formatValue(specifier.operand1)
+    let operand2 = formatValue(specifier.operand2)
+    let comparison = specifier.operatorType
+    if let name = _comparisonOperators[comparison] {
         return "\(operand1) \(name) \(operand2)"
-    } else if
-        let containment = AE4.Containment(rawValue: opcode),
-        let name = _containmentOperators[containment]
-    {
-        return "\(operand1).\(name)(\(operand2))"
     }
     return "<\(type(of: specifier))(relo:\(specifier.operatorType),obj1:\(formatValue(operand1)),obj2:\(formatValue(operand2)))>"
 }
 
 func formatLogicalTest(_ specifier: LogicalTest) -> String {
-    let operands = specifier.operands.map({formatValue($0)})
-    let opcode = specifier.operatorType.enumCodeValue
-    if let logical = AE4.LogicalOperator(rawValue: opcode) {
-        if let name = _logicalBinaryOperators[logical], operands.count > 1 {
-            return operands.joined(separator: " \(name) ")
-        } else if let name = _logicalUnaryOperators[logical], operands.count == 1 {
-            return "\(name) (\(operands[0]))"
-        }
+    let operands = specifier.operands.map(formatValue(_:))
+    let logical = specifier.operatorType
+    if let name = _logicalBinaryOperators[logical], operands.count > 1 {
+        return operands.joined(separator: " \(name) ")
+    }
+    if let name = _logicalUnaryOperators[logical], operands.count == 1 {
+        return "\(name) (\(operands[0]))"
     }
     return "<\(type(of: specifier))(logc:\(specifier.operatorType),term:\(formatValue(operands)))>"
 }
@@ -256,25 +226,25 @@ public func formatCommand(_ description: CommandDescription, applicationObject: 
     switch description.signature {
     case .named(let name, let directParameter, let keywordParameters, let requestedType):
         if description.subject != nil && parameterExists(directParameter) {
-            parentSpecifier = formatSAObject(description.subject!)
-            args.append(formatSAObject(directParameter))
+            parentSpecifier = formatAEtherealObject(description.subject!)
+            args.append(formatAEtherealObject(directParameter))
             //} else if eventClass == _kAECoreSuite && eventID == _kAECreateElement { // TO DO: format make command as special case (for convenience, sendAppleEvent should allow user to call `make` directly on a specifier, in which case the specifier is used as its `at` parameter if not already given)
         } else if description.subject == nil && parameterExists(directParameter) {
-            parentSpecifier = formatSAObject(directParameter)
+            parentSpecifier = formatAEtherealObject(directParameter)
         } else if description.subject != nil && !parameterExists(directParameter) {
-            parentSpecifier = formatSAObject(description.subject!)
+            parentSpecifier = formatAEtherealObject(description.subject!)
         }
         parentSpecifier += ".\(name)"
-        for (key, value) in keywordParameters { args.append("\(key): \(formatSAObject(value))") }
+        for (key, value) in keywordParameters { args.append("\(key): \(formatAEtherealObject(value))") }
         if let symbol = requestedType { args.append("requestedType: \(symbol)") }
     case .codes(let eventClass, let eventID, let parameters):
         if let subject = description.subject {
-            parentSpecifier = formatSAObject(subject)
+            parentSpecifier = formatAEtherealObject(subject)
         }
         parentSpecifier += ".sendAppleEvent"
         args.append("\(formatFourCharCodeString(eventClass)), \(formatFourCharCodeString(eventID))")
         if parameters.count > 0 {
-            let params = parameters.map({ "\(formatFourCharCodeString($0)): \(formatSAObject($1)))" }).joined(separator: ", ")
+            let params = parameters.map({ "\(formatFourCharCodeString($0)): \(formatAEtherealObject($1)))" }).joined(separator: ", ")
             args.append("[\(params)]")
         }
     }
@@ -296,8 +266,8 @@ public func formatCommand(_ description: CommandDescription, applicationObject: 
 
 /******************************************************************************/
 
-// convert an OSType to its String literal representation, e.g. 'docu' -> "\"docu\""
-func formatFourCharCodeString(_ code: OSType) -> String {
+// convert an AE4 to its String literal representation, e.g. 'docu' -> "\"docu\""
+func formatFourCharCodeString(_ code: AE4) -> String {
     var n = CFSwapInt32HostToBig(code)
     var result = ""
     for _ in 1...4 {

@@ -53,6 +53,6 @@ func considerationsMask(considering: Considerations, ignoring: Considerations) -
 
 /// Encodes `considering` and `ignoring` as an `enumConsidsAndIgnores`
 /// (`AE4.Attributes.considsAndIgnores`) attribute descriptor.
-func encode(considering: Considerations, ignoring: Considerations) -> NSAppleEventDescriptor {
-    NSAppleEventDescriptor(uint32: considerationsMask(considering: considering, ignoring: ignoring))
+func encode(considering: Considerations, ignoring: Considerations) -> AEDescriptor {
+    AEDescriptor(uint32: considerationsMask(considering: considering, ignoring: ignoring))
 }
