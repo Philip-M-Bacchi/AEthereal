@@ -15,12 +15,11 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/ThatsJustCheesy/SDEFinitely", from: "1.2.0")
     ],
     targets: [
         .target(
             name: "AEthereal",
-            dependencies: ["SDEFinitely"]
+            dependencies: []
         ),
     ]
 )
