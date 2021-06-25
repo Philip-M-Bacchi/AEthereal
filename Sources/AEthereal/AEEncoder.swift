@@ -342,9 +342,13 @@ private func encode(_ value: Encodable, to encoder: Encoder) throws {
 private func setType(_ descriptorContainer: AEDescriptorContainer, _ value: Any) throws {
     let descriptor = descriptorContainer.descriptor
     if let typed = value as? AETyped {
-        guard let coerced = descriptor.coerce(to: typed.aeType) else {
-            throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: descriptorContainer.codingPath, debugDescription: "Cannot coerce descriptor \(descriptor) for value \(value) to type \(typed.aeType)"))
+        if let coerced = descriptor.coerce(to: typed.aeType) {
+            // Should work for record descriptors
+            descriptorContainer.descriptor = coerced
+        } else {
+            // Should work for all other descriptors
+            descriptorContainer.descriptor = AEDescriptor(type: typed.aeType, data: descriptor.data)
         }
-        descriptorContainer.descriptor = coerced
+        
     }
 }
