@@ -15,8 +15,11 @@ public final class AEDescriptor: NSAppleEventDescriptor {
         type == .type && typeCodeValue == AE4.AEType.missingValue.rawValue
     }
     
-    public init(_ descriptor: NSAppleEventDescriptor) {
-        super.init(aeDescNoCopy: descriptor.aeDesc!)
+    public override init(aeDescNoCopy aeDesc: UnsafePointer<AEDesc>) {
+        super.init(aeDescNoCopy: aeDesc)
+    }
+    public convenience init(_ descriptor: NSAppleEventDescriptor) {
+        self.init(aeDescNoCopy: descriptor.aeDesc!)
     }
     
     public override class func null() -> AEDescriptor {
