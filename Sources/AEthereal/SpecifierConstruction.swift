@@ -1,7 +1,22 @@
 // See README.md for licensing information.
 
-// MARK: Object specifiers
-extension ObjectSpecifier {
+// MARK: Chained object specifier construction
+public protocol ChainableSpecifier {
+    
+    func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier
+    func byUserProperty(_ userProperty: String) -> ObjectSpecifier
+    func byIndex(_ wantType: AE4.AEType, _ index: Int) -> ObjectSpecifier
+    func byAbsolute(_ wantType: AE4.AEType, _ absolute: AE4.AbsoluteOrdinal) -> ObjectSpecifier
+    func byRelative(_ wantType: AE4.AEType, _ relative: AE4.RelativeOrdinal) -> ObjectSpecifier
+    func byName(_ wantType: AE4.AEType, _ name: String) -> ObjectSpecifier
+    func byID(_ wantType: AE4.AEType, _ id: Codable) -> ObjectSpecifier
+    func byRange(_ wantType: AE4.AEType, from: Codable, thru: Codable) -> ObjectSpecifier
+    func byTest(_ wantType: AE4.AEType, _ test: ObjectSpecifier.TestClause) -> ObjectSpecifier
+    
+    func insertion(at location: AE4.InsertionLocation) -> InsertionSpecifier
+}
+
+extension ObjectSpecifier: ChainableSpecifier {
     
     public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
         ObjectSpecifier(parent: .objectSpecifier(self), wantType: .property, selectorForm: .property(property))
@@ -31,9 +46,13 @@ extension ObjectSpecifier {
         ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .test(test))
     }
     
+    public func insertion(at location: AE4.InsertionLocation) -> InsertionSpecifier {
+        InsertionSpecifier(parent: .objectSpecifier(self), insertionLocation: location)
+    }
+    
 }
 
-extension RootSpecifier {
+extension RootSpecifier: ChainableSpecifier {
     
     public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
         ObjectSpecifier(parent: .rootSpecifier(self), wantType: .property, selectorForm: .property(property))
@@ -63,9 +82,13 @@ extension RootSpecifier {
         ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .test(test))
     }
     
+    public func insertion(at location: AE4.InsertionLocation) -> InsertionSpecifier {
+        InsertionSpecifier(parent: .rootSpecifier(self), insertionLocation: location)
+    }
+    
 }
 
-// MARK: Tests
+// MARK: Test clause construction
 extension ObjectSpecifier {
     
     public func beginsWith(_ value: Codable) -> TestClause {
@@ -120,13 +143,4 @@ public func ||(lhs: ObjectSpecifier.TestClause, rhs: ObjectSpecifier.TestClause)
 
 public prefix func !(op: ObjectSpecifier.TestClause) -> ObjectSpecifier.TestClause {
     .logicalUnary(operator: .not, operand: op)
-}
-
-// MARK: Insertion specifiers
-extension ObjectSpecifier {
-    
-    public func insertion(at location: AE4.InsertionLocation) -> InsertionSpecifier {
-        InsertionSpecifier(parent: .objectSpecifier(self), insertionLocation: location)
-    }
-    
 }
