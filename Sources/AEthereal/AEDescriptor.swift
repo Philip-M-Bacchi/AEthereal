@@ -19,7 +19,7 @@ public final class AEDescriptor: NSAppleEventDescriptor {
         super.init(aeDescNoCopy: aeDesc)
     }
     public convenience init(_ descriptor: NSAppleEventDescriptor) {
-        self.init(aeDescNoCopy: descriptor.aeDesc!)
+        self.init(aeDescNoCopy: (descriptor.copy() as! NSAppleEventDescriptor).aeDesc!)
     }
     
     public override class func null() -> AEDescriptor {
