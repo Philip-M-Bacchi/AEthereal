@@ -107,15 +107,15 @@ extension Dictionary where Key == AE4, Value == AEDescriptor {
 // https://stackoverflow.com/questions/33112559/protocol-doesnt-conform-to-itself/43408193#43408193
 extension Encodable {
     
-    func encode<Key>(to container: inout KeyedEncodingContainer<Key>, forKey key: Key) throws {
+    public func encode<Key>(to container: inout KeyedEncodingContainer<Key>, forKey key: Key) throws {
         try container.encode(self, forKey: key)
     }
     
-    func encode(to container: inout UnkeyedEncodingContainer) throws {
+    public func encode(to container: inout UnkeyedEncodingContainer) throws {
         try container.encode(self)
     }
     
-    func encode(to container: inout SingleValueEncodingContainer) throws {
+    public func encode(to container: inout SingleValueEncodingContainer) throws {
         try container.encode(self)
     }
     
