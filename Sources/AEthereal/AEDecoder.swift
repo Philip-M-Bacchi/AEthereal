@@ -49,7 +49,7 @@ public class AEDecoder: Decoder {
         init(decoder: AEDecoder, descriptor: AEDescriptor) throws {
             self.decoder = decoder
             guard descriptor.isRecordDescriptor else {
-                throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
+                throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
             }
             self.descriptor = descriptor
         }
@@ -115,7 +115,7 @@ public class AEDecoder: Decoder {
             self.decoder = decoder
             // Note that list descriptors are, internally, "record descriptors".
             guard descriptor.isRecordDescriptor else {
-                throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
+                throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
             }
             self.descriptor = descriptor
         }
