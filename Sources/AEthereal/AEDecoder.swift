@@ -4,56 +4,60 @@ import Foundation
 
 public class AEDecoder: Decoder {
     
-    public static func decode<T: Decodable>(_ descriptor: AEDescriptor) throws -> T {
-        let decoder = AEDecoder(descriptor: descriptor)
+    public static func decode<T: Decodable>(_ descriptor: AEDescriptor, userInfo: [CodingUserInfoKey : Any] = [:]) throws -> T {
+        let decoder = AEDecoder(descriptor: descriptor, userInfo: userInfo)
         guard let decoded: T = try AEthereal.decode(from: decoder) else {
             throw DecodingError.typeMismatch(T.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "\(descriptor) cannot be decoded as \(T.self)"))
         }
         return decoded
     }
     
-    public convenience init(descriptor: AEDescriptor) {
-        self.init(codingPath: [], descriptor: descriptor)
+    public convenience init(descriptor: AEDescriptor, userInfo: [CodingUserInfoKey : Any] = [:]) {
+        self.init(codingPath: [], userInfo: userInfo, descriptor: descriptor)
     }
     
-    fileprivate init(codingPath: [CodingKey] = [], descriptor: AEDescriptor) {
+    fileprivate init(codingPath: [CodingKey] = [], userInfo: [CodingUserInfoKey : Any], descriptor: AEDescriptor) {
         self.codingPath = codingPath
+        self.userInfo = userInfo.merging([.descriptor: descriptor], uniquingKeysWith: { old, new in new })
         self.descriptor = descriptor
+    }
+    
+    fileprivate convenience init(decoder: AEDecoder, descriptor: AEDescriptor) {
+        self.init(codingPath: decoder.codingPath, userInfo: decoder.userInfo, descriptor: descriptor)
     }
     
     public var codingPath: [CodingKey]
     
-    public var userInfo: [CodingUserInfoKey : Any] {
-        [
-            .descriptor: descriptor
-        ]
-    }
+    public var userInfo: [CodingUserInfoKey : Any]
     
     var descriptor: AEDescriptor
     
     public func container<Key>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> where Key : CodingKey {
-        KeyedDecodingContainer(try KeyedContainer<Key>(codingPath: codingPath, descriptor: descriptor))
+        KeyedDecodingContainer(try KeyedContainer<Key>(decoder: self, descriptor: descriptor))
     }
     
     public func unkeyedContainer() throws -> UnkeyedDecodingContainer {
-        try UnkeyedContainer(codingPath: codingPath, descriptor: descriptor)
+        try UnkeyedContainer(decoder: self, descriptor: descriptor)
     }
     
     public func singleValueContainer() throws -> SingleValueDecodingContainer {
-        SingleValueContainer(codingPath: codingPath, descriptor: descriptor)
+        SingleValueContainer(decoder: self, descriptor: descriptor)
     }
     
     private class KeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol, AEDescriptorContainer {
         
-        init(codingPath: [CodingKey], descriptor: AEDescriptor) throws {
-            self.codingPath = codingPath
+        init(decoder: AEDecoder, descriptor: AEDescriptor) throws {
+            self.decoder = decoder
             guard descriptor.isRecordDescriptor else {
                 throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
             }
             self.descriptor = descriptor
         }
         
-        var codingPath: [CodingKey]
+        var decoder: AEDecoder
+        var codingPath: [CodingKey] {
+            decoder.codingPath
+        }
 
         var descriptor: AEDescriptor
         
@@ -80,7 +84,7 @@ public class AEDecoder: Decoder {
         }
         
         func decode<T>(_ type: T.Type, forKey key: Key) throws -> T where T : Decodable {
-            let decoder = AEDecoder(codingPath: codingPath + [key], descriptor: try value(for: key))
+            let decoder = AEDecoder(codingPath: codingPath + [key], userInfo: decoder.userInfo, descriptor: try value(for: key))
             guard let decoded: T = try AEthereal.decode(from: decoder) else {
                 throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
             }
@@ -88,11 +92,11 @@ public class AEDecoder: Decoder {
         }
         
         func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type, forKey key: Key) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
-            KeyedDecodingContainer(try KeyedContainer<NestedKey>(codingPath: codingPath, descriptor: try value(for: key)))
+            KeyedDecodingContainer(try KeyedContainer<NestedKey>(decoder: decoder, descriptor: try value(for: key)))
         }
         
         func nestedUnkeyedContainer(forKey key: Key) throws -> UnkeyedDecodingContainer {
-            try UnkeyedContainer(codingPath: codingPath, descriptor: try value(for: key))
+            try UnkeyedContainer(decoder: decoder, descriptor: try value(for: key))
         }
         
         func superDecoder() throws -> Decoder {
@@ -107,8 +111,8 @@ public class AEDecoder: Decoder {
     
     private class UnkeyedContainer: UnkeyedDecodingContainer, AEDescriptorContainer {
         
-        init(codingPath: [CodingKey], descriptor: AEDescriptor) throws {
-            self.codingPath = codingPath
+        init(decoder: AEDecoder, descriptor: AEDescriptor) throws {
+            self.decoder = decoder
             // Note that list descriptors are, internally, "record descriptors".
             guard descriptor.isRecordDescriptor else {
                 throw DecodingError.typeMismatch(Self.self, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor.debugDescription) is not a record descriptor"))
@@ -116,7 +120,10 @@ public class AEDecoder: Decoder {
             self.descriptor = descriptor
         }
         
-        var codingPath: [CodingKey]
+        var decoder: AEDecoder
+        var codingPath: [CodingKey] {
+            decoder.codingPath
+        }
         var count: Int? {
             descriptor.numberOfItems
         }
@@ -146,7 +153,7 @@ public class AEDecoder: Decoder {
         
         func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
             try withNext { descriptor in
-                let decoder = AEDecoder(codingPath: codingPath, descriptor: descriptor)
+                let decoder = AEDecoder(decoder: decoder, descriptor: descriptor)
                 guard let decoded: T = try AEthereal.decode(from: decoder) else {
                     throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
                 }
@@ -156,13 +163,13 @@ public class AEDecoder: Decoder {
         
         func nestedContainer<NestedKey>(keyedBy keyType: NestedKey.Type) throws -> KeyedDecodingContainer<NestedKey> where NestedKey : CodingKey {
             try withNext { descriptor in
-                (KeyedDecodingContainer(try KeyedContainer<NestedKey>(codingPath: codingPath, descriptor: descriptor)), shouldIncrement: true)
+                (KeyedDecodingContainer(try KeyedContainer<NestedKey>(decoder: decoder, descriptor: descriptor)), shouldIncrement: true)
             }
         }
         
         func nestedUnkeyedContainer() throws -> UnkeyedDecodingContainer {
             try withNext { descriptor in
-                (try UnkeyedContainer(codingPath: codingPath, descriptor: descriptor), shouldIncrement: true)
+                (try UnkeyedContainer(decoder: decoder, descriptor: descriptor), shouldIncrement: true)
             }
         }
         
@@ -174,12 +181,15 @@ public class AEDecoder: Decoder {
     
     private class SingleValueContainer: SingleValueDecodingContainer, AEDescriptorContainer {
         
-        init(codingPath: [CodingKey], descriptor: AEDescriptor) {
-            self.codingPath = codingPath
+        init(decoder: AEDecoder, descriptor: AEDescriptor) {
+            self.decoder = decoder
             self.descriptor = descriptor
         }
         
-        var codingPath: [CodingKey]
+        var decoder: AEDecoder
+        var codingPath: [CodingKey] {
+            decoder.codingPath
+        }
         
         var descriptor: AEDescriptor
         
@@ -251,7 +261,7 @@ public class AEDecoder: Decoder {
         }
         
         func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-            let decoder = AEDecoder(codingPath: codingPath, descriptor: descriptor)
+            let decoder = AEDecoder(decoder: decoder, descriptor: descriptor)
             guard let decoded: T = try AEthereal.decode(from: decoder) else {
                 throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
             }
