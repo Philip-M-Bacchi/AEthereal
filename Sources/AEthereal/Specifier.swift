@@ -306,7 +306,7 @@ public struct InsertionSpecifier: Codable, AETyped {
     
 }
 
-public enum RootSpecifier: Codable, AETyped {
+public enum RootSpecifier: Codable {
     
     /// Root of all absolute object specifiers.
     /// e.g., `document 1 of «application»`.
@@ -328,14 +328,15 @@ public enum RootSpecifier: Codable, AETyped {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case .application, .specimen, .container:
-            try container.encodeNil()
+        case .application:
+            try container.encode(AEDescriptor.appRoot)
+        case .container:
+            try container.encode(AEDescriptor.containerRoot)
+        case .specimen:
+            try container.encode(AEDescriptor.specimenRoot)
         case let .object(descriptor):
-            _ = descriptor
-            fatalError("unimplemented")
+            try container.encode(descriptor)
         }
-        // aeType will set our descriptor type if we are encoding to
-        // AEDescriptor.
     }
     
     public init(from decoder: Decoder) throws {
@@ -352,19 +353,6 @@ public enum RootSpecifier: Codable, AETyped {
             self = .specimen
         default:
             self = .object(descriptor)
-        }
-    }
-    
-    public var aeType: AE4.AEType {
-        switch self {
-        case .application:
-            return .null
-        case .container:
-            return .currentContainer
-        case .specimen:
-            return .objectBeingExamined
-        case let .object(object):
-            return object.type
         }
     }
     
