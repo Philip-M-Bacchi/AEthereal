@@ -1,163 +1,132 @@
-//  Originally written by hhas.
-//  See README.md for licensing information.
+// See README.md for licensing information.
 
-//
-//  Extensions that add the standard selector vars/methods to Specifier classes.
-//  These allow specifiers to be built up via chained calls, e.g.:
-//
-//     paragraphs 1 thru -2 of text of document "README" of it
-//
-//     App.generic.application.elements(cDocument)["README"].property(cText).elements(cParagraph)[1,-2]
-//
-
-import Foundation
-
-extension Specifier {
-
-    public func userProperty(_ name: String) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: .property, selectorForm: .userPropertyID, selectorData: name, parentQuery: self, app: app)
-    }
-
-    public func property(_ code: AE4) -> SingleObjectSpecifier {
-		SingleObjectSpecifier(wantType: .property, selectorForm: .propertyID, selectorData: AEDescriptor(typeCode: code), parentQuery: self, app: app)
-    }
-    
-    public func elements(_ code: AE4.AEType) -> MultipleObjectSpecifier {
-        MultipleObjectSpecifier(wantType: code, selectorForm: .absolutePosition, selectorData: AE4.AbsoluteOrdinal.all, parentQuery: self, app: app)
-    }
-    
-    public var beginning: InsertionSpecifier {
-        InsertionSpecifier(insertionLocation: .beginning, parentQuery: self, app: app)
-    }
-    public var end: InsertionSpecifier {
-        InsertionSpecifier(insertionLocation: .end, parentQuery: self, app: app)
-    }
-    public var before: InsertionSpecifier {
-        InsertionSpecifier(insertionLocation: .before, parentQuery: self, app: app)
-    }
-    public var after: InsertionSpecifier {
-        InsertionSpecifier(insertionLocation: .after, parentQuery: self, app: app)
-    }
-    
-}
-
+// MARK: Object specifiers
 extension ObjectSpecifier {
     
-    public func previous(_ elementClass: AE4.AEType? = nil) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: elementClass ?? wantType, selectorForm: .relativePosition, selectorData: AE4.RelativeOrdinal.previous, parentQuery: self, app: app)
+    public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: .property, selectorForm: .property(property))
     }
-    public func next(_ elementClass: AE4.AEType? = nil) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: elementClass ?? wantType, selectorForm: .relativePosition, selectorData: AE4.RelativeOrdinal.next, parentQuery: self, app: app)
+    public func byUserProperty(_ userProperty: String) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: .property, selectorForm: .userProperty(userProperty))
     }
-    
-}
-
-public class MultipleObjectSpecifier: SingleObjectSpecifier {}
-
-extension MultipleObjectSpecifier {
-    
-    public func index(_ index: AEEncodable) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: wantType, selectorForm: .absolutePosition, selectorData: index, parentQuery: self, app: app)
+    public func byIndex(_ wantType: AE4.AEType, _ index: Int) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .index(index))
     }
-    public func named(_ name: AEEncodable) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: wantType, selectorForm: .name, selectorData: name, parentQuery: self, app: app)
+    public func byAbsolute(_ wantType: AE4.AEType, _ absolute: AE4.AbsoluteOrdinal) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .absolute(absolute))
     }
-    public func id(_ id: AEEncodable) -> SingleObjectSpecifier {
-        return SingleObjectSpecifier(wantType: wantType, selectorForm: .uniqueID, selectorData: id, parentQuery: self, app: app)
+    public func byRelative(_ wantType: AE4.AEType, _ relative: AE4.RelativeOrdinal) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .relative(relative))
     }
-    
-    public var first: SingleObjectSpecifier {
-        return SingleObjectSpecifier(wantType: wantType, selectorForm: .absolutePosition, selectorData: AE4.AbsoluteOrdinal.first, parentQuery: self, app: app)
+    public func byName(_ wantType: AE4.AEType, _ name: String) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .name(name))
     }
-    public var middle: SingleObjectSpecifier {
-        return SingleObjectSpecifier(wantType: wantType, selectorForm: .absolutePosition, selectorData: AE4.AbsoluteOrdinal.middle, parentQuery: self, app: app)
+    public func byID(_ wantType: AE4.AEType, _ id: Codable) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .id(id))
     }
-    public var last: SingleObjectSpecifier {
-        return SingleObjectSpecifier(wantType: wantType, selectorForm: .absolutePosition, selectorData: AE4.AbsoluteOrdinal.last, parentQuery: self, app: app)
+    public func byRange(_ wantType: AE4.AEType, from: Codable, thru: Codable) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .range(RangeSelector(start: from, stop: thru)))
     }
-    public var any: SingleObjectSpecifier {
-        return SingleObjectSpecifier(wantType: wantType, selectorForm: .absolutePosition, selectorData: AE4.AbsoluteOrdinal.random, parentQuery: self, app: app)
-    }
-    
-    public func range(from: AEEncodable, to: AEEncodable) -> MultipleObjectSpecifier {
-        return MultipleObjectSpecifier(wantType: wantType, selectorForm: .range, selectorData: RangeSelector(start: from, stop: to, wantType: wantType), parentQuery: self, app: app)
-    }
-    
-    public func test(_ testClause: TestClause) -> SingleObjectSpecifier {
-        SingleObjectSpecifier(wantType: wantType, selectorForm: .test, selectorData: testClause, parentQuery: self, app: app)
+    public func byTest(_ wantType: AE4.AEType, _ test: TestClause) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .objectSpecifier(self), wantType: wantType, selectorForm: .test(test))
     }
     
 }
 
-// MARK: Targeted root construction
 extension RootSpecifier {
     
-    private convenience init(target: AETarget) {
-        let app = App(target: target)
-        self.init(.application, app: app)
+    public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: .property, selectorForm: .property(property))
     }
-    
-    public convenience init(name: String) {
-        self.init(target: .name(name))
+    public func byUserProperty(_ userProperty: String) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: .property, selectorForm: .userProperty(userProperty))
     }
-    
-    public convenience init(url: URL) {
-        self.init(target: .url(url))
+    public func byIndex(_ wantType: AE4.AEType, _ index: Int) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .index(index))
     }
-    
-    public convenience init(bundleIdentifier: String) {
-        self.init(target: .bundleIdentifier(bundleIdentifier))
+    public func byAbsolute(_ wantType: AE4.AEType, _ absolute: AE4.AbsoluteOrdinal) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .absolute(absolute))
     }
-    
-    public convenience init(processIdentifier: pid_t) {
-        self.init(target: .processIdentifier(processIdentifier))
+    public func byRelative(_ wantType: AE4.AEType, _ relative: AE4.RelativeOrdinal) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .relative(relative))
     }
-    
-    public convenience init(addressDescriptor: AEDescriptor) {
-        self.init(target: .descriptor(addressDescriptor))
+    public func byName(_ wantType: AE4.AEType, _ name: String) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .name(name))
     }
-    
-}
-
-// MARK: Utilities
-extension RootSpecifier {
-    
-    /// Launches the target application, if any.
-    public func launch() throws {
-        try self.app.target.launch()
+    public func byID(_ wantType: AE4.AEType, _ id: Codable) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .id(id))
     }
-    
-    /// Whether the target application, if any, is currently running.
-    public var isRunning: Bool {
-        return self.app.target.isRunning
+    public func byRange(_ wantType: AE4.AEType, from: Codable, thru: Codable) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .range(ObjectSpecifier.RangeSelector(start: from, stop: thru)))
+    }
+    public func byTest(_ wantType: AE4.AEType, _ test: ObjectSpecifier.TestClause) -> ObjectSpecifier {
+        ObjectSpecifier(parent: .rootSpecifier(self), wantType: wantType, selectorForm: .test(test))
     }
     
 }
 
-// MARK: Evaluation
-extension SingleObjectSpecifier {
+// MARK: Tests
+extension ObjectSpecifier {
     
-    public func get(
-        _ directParameter: Any = NoParameter,
-        requestedType: Symbol? = nil,
-        waitReply: Bool = true,
-        sendOptions: SendOptions? = nil,
-        timeout: TimeInterval? = nil,
-        ignoring: Considerations? = nil
-    ) throws -> AEValue
-    {
-        try self.app.sendAppleEvent(
-            eventClass: AE4.Suites.coreSuite,
-            eventID: AE4.AESymbols.getData,
-            targetSpecifier: self,
-            directParameter: directParameter,
-            keywordParameters: [],
-            requestedType: requestedType,
-            waitReply: waitReply,
-            sendOptions: sendOptions,
-            timeout: timeout,
-            ignoring: ignoring
-        )
+    public func beginsWith(_ value: Codable) -> TestClause {
+        .comparison(operator: .beginsWith, lhs: self, rhs: value)
+    }
+
+    public func endsWith(_ value: Codable) -> TestClause {
+        .comparison(operator: .endsWith, lhs: self, rhs: value)
+    }
+
+    public func contains(_ value: Codable) -> TestClause {
+        .comparison(operator: .contains, lhs: self, rhs: value)
+    }
+
+    public func isIn(_ value: Codable) -> TestClause {
+        .comparison(operator: .contains, lhs: value, rhs: self)
+    }
+    
+}
+
+public func <(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .comparison(operator: .lessThan, lhs: lhs, rhs: rhs)
+}
+
+public func <=(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .comparison(operator: .lessThanEquals, lhs: lhs, rhs: rhs)
+}
+
+public func ==(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .comparison(operator: .equals, lhs: lhs, rhs: rhs)
+}
+
+public func !=(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .logicalUnary(operator: .not, operand: lhs == rhs)
+}
+
+public func >(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .comparison(operator: .greaterThan, lhs: lhs, rhs: rhs)
+}
+
+public func >=(lhs: ObjectSpecifier, rhs: Codable) -> ObjectSpecifier.TestClause {
+    .comparison(operator: .greaterThanEquals, lhs: lhs, rhs: rhs)
+}
+
+public func &&(lhs: ObjectSpecifier.TestClause, rhs: ObjectSpecifier.TestClause) -> ObjectSpecifier.TestClause {
+    .logicalBinary(operator: .and, lhs: lhs, rhs: rhs)
+}
+
+public func ||(lhs: ObjectSpecifier.TestClause, rhs: ObjectSpecifier.TestClause) -> ObjectSpecifier.TestClause {
+    .logicalBinary(operator: .or, lhs: lhs, rhs: rhs)
+}
+
+public prefix func !(op: ObjectSpecifier.TestClause) -> ObjectSpecifier.TestClause {
+    .logicalUnary(operator: .not, operand: op)
+}
+
+// MARK: Insertion specifiers
+extension ObjectSpecifier {
+    
+    public func insertion(at location: AE4.InsertionLocation) -> InsertionSpecifier {
+        InsertionSpecifier(parent: .objectSpecifier(self), insertionLocation: location)
     }
     
 }

@@ -93,12 +93,14 @@ public enum AETarget: CustomStringConvertible {
     }
     
     private func bundleIdentifier(processDescriptor: AEDescriptor) -> String? {
-        switch try? RootSpecifier(addressDescriptor: processDescriptor).property(pID).get() {
-        case let .string(id):
-            return id
-        default:
+        let specifier = RootSpecifier.application.byProperty(AE4.AEEnum(rawValue: AE4.Properties.id))
+        guard
+            let reply = try? App(target: .descriptor(processDescriptor)).sendAppleEvent(eventClass: AE4.Suites.coreSuite, eventID: AE4.AESymbols.getData, targetQuery: .objectSpecifier(specifier)),
+            let id = try? String(from: AEDecoder(descriptor: reply))
+        else {
             return nil
         }
+        return id
     }
     
     /// Whether this target can be automatically relaunched.
@@ -210,7 +212,7 @@ public enum AETarget: CustomStringConvertible {
     /// it will be launched.
     /// If the target is `.current`, the result will be `.currentProcess()`.
     /// If the target is local to this machine, the result will refer to a PID.
-    public func descriptor(_ launchOptions: LaunchOptions = DefaultLaunchOptions) throws -> AEDescriptor? {
+    public func descriptor(_ launchOptions: LaunchOptions = launchOptions) throws -> AEDescriptor? {
         switch self {
         case .current:
             return AEDescriptor.currentProcess()

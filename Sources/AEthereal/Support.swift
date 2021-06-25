@@ -69,47 +69,32 @@ extension FourCharCode {
 
 extension String {
     
-    public init(fourCharCode: FourCharCode) {
+    public init(ae4Code: AE4) {
         // convert an AE4 to four-character string containing MacOSRoman characters
-        self.init(UTCreateStringForOSType(fourCharCode).takeRetainedValue() as String)
+        self.init(UTCreateStringForOSType(ae4Code).takeRetainedValue() as String)
+    }
+    
+    public var ae4Code: AE4? {
+        // TODO: This function doesn't have any error reporting.
+        UTGetOSTypeFromString(self as CFString)
     }
     
 }
 
+/*
+func formatAE4Code(_ code: AE4) -> String {
+    var n = CFSwapInt32HostToBig(code)
+    var result = ""
+    for _ in 1...4 {
+        let c = n % 256
+        result += String(format: (c == 0x21 || 0x23 <= c && c <= 0x7e) ? "%c" : "\\0x%02X", c)
+        n >>= 8
+    }
+    return "\"\(result)\""
+}
+ */
+
+
 public func eightCharCode(_ eventClass: AE4, _ eventID: AE4) -> UInt64 {
     return UInt64(eventClass) << 32 | UInt64(eventID)
-}
-
-// the following AEDesc types will be mapped to Symbol instances
-let symbolDescriptorTypes: Set<DescType> = [typeType, typeEnumerated, typeProperty, typeKeyword]
-
-/******************************************************************************/
-
-public typealias SendOptions = AEDescriptor.SendOptions
-
-/******************************************************************************/
-// launch and relaunch options used in Application initializers
-
-public typealias LaunchOptions = NSWorkspace.LaunchOptions
-
-public let DefaultLaunchOptions: LaunchOptions = NSWorkspace.LaunchOptions.withoutActivation
-
-public enum RelaunchMode { // if [local] target process has terminated, relaunch it automatically when sending next command to it
-    case always
-    case limited
-    case never
-}
-
-public let DefaultRelaunchMode: RelaunchMode = .limited
-
-// Indicates omitted command parameter
-
-public enum OptionalParameter {
-    case none
-}
-
-public let NoParameter = OptionalParameter.none
-
-func parameterExists(_ value: Any) -> Bool {
-    return value as? OptionalParameter != NoParameter
 }

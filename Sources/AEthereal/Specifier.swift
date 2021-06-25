@@ -1,378 +1,370 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-//
-//  Base classes for constructing AE queries.
-//
-//  Notes:
-//
-//  An AE query is represented as a linked list of AEDescs, primarily AERecordDescs of typeObjectSpecifier. Each object specifier record has four properties:
-//
-//      'want' -- the type of element to identify (or 'prop' when identifying a property)
-//      'form', 'seld' -- the reference form and selector data identifying the element(s) or property
-//      'from' -- the parent descriptor in the linked list
-//
-//    For example:
-//
-//      name of document "ReadMe" [of application "TextEdit"]
-//
-//    is represented by the following chain of AEDescs:
-//
-//      {want:'prop', form:'prop', seld:'pnam', from:{want:'docu', form:'name', seld:"ReadMe", from:null}}
-//
-//    Additional AERecord types (typeInsertionLocation, typeRangeDescriptor, typeCompDescriptor, typeLogicalDescriptor) are also used to construct specialized query forms describing insertion points before/after existing elements, element ranges, and test clauses.
-//
-//    Atomic AEDescs of typeNull, typeCurrentContainer, and typeObjectBeingExamined are used to terminate the linked list.
-//
-//
-//  [TO DO: developer notes on Apple event query forms and Apple Event Object Model's relational object graphs (objects with attributes, one-to-one relationships, and one-to-many relationships); aka "AE IPC is simple first-class relational queries, not OOP"]
-//
-//
-//  Specifier.swift defines the base classes from which concrete Specifier classes representing each major query form are constructed. These base classes combine with various SpecifierExtensions (which provide by-index, by-name, etc selectors and Application object constructors) and glue-defined Query and Command extensions (which provide property and all-elements selectors, and commands) to form the following concrete classes:
-//
-//    CLASS                 DESCRIPTION                         CAN CONSTRUCT
-//
-//    Query                 [base class]
-//     ├─PREFIXInsertion    insertion location specifier        ├─commands
-//     └─PREFIXObject       [object specifier base protocol]    └─commands, and property and all-elements specifiers
-//        ├─PREFIXItem         single-object specifier             ├─previous/next selectors
-//        │  └─PREFIXItems     multi-object specifier              │  └─by-index/name/id/ordinal/range/test selectors
-//        └─PREFIXRoot         App/Con/Its (untargeted roots)      ├─[1]
-//           └─APPLICATION     Application (app-targeted root)     └─initializers
-//
-//
-//    (The above diagram fudges the exact inheritance hierarchy for illustrative purposes. Commands are actually provided by a PREFIXCommand protocol [not shown], which is adopted by APPLICATION and all PREFIX classes except PREFIXRoot [1] - which cannot construct working commands as it has no target information, so omits these methods for clarity. Strictly speaking, the only class which should implement commands is APPLICATION, as Apple event IPC is based on Remote *Procedure* Calls, not OOP; however, they also appear on specifier classes as a convenient shorthand when writing commands whose direct parameter is a specifier. Note that while all specifier classes provide command methods [including those used to construct relative-specifiers in by-range and by-test clauses, as omitting commands from these is more trouble than its worth] they will automatically throw if their root is an untargeted App/Con/Its object.)
-//
-//    The following classes are also defined for use with Its-based object specifiers in by-test selectors.
-//
-//    Query
-//     └─TestClause         [test clause base class]
-//        ├─ComparisonTest     comparison/containment test
-//        └─LogicalTest        Boolean logic test
-//
-//
-//    Except for APPLICATION, users do not instantiate any of these classes directly, but instead by chained property/method calls on existing Query instances.
-//
-
 import Foundation
-import AppKit
 
-/// An AppleEvent object model query component.
-/// Should either be a specifier or a test clause.
-public protocol Query: AEEncodable {
+/// An AppleEvent object model query.
+public indirect enum Query: Codable {
     
-    var rootSpecifier: RootSpecifier { get }
-
-    var app: App { get set }
+    case rootSpecifier(RootSpecifier)
+    case objectSpecifier(ObjectSpecifier)
+    case insertionSpecifier(InsertionSpecifier)
     
-}
-
-/// A specifier, which is a chainable AppleEvent object model query.
-public protocol Specifier: Query {
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case let .rootSpecifier(rootSpecifier):
+            try rootSpecifier.encode(to: encoder)
+        case let .objectSpecifier(objectSpecifier):
+            try objectSpecifier.encode(to: encoder)
+        case let .insertionSpecifier(insertionSpecifier):
+            try insertionSpecifier.encode(to: encoder)
+        }
+    }
     
-    var app: App { get set }
-    
-    var parentQuery: Query { get }
-    var rootSpecifier: RootSpecifier { get }
-    
-}
-
-extension Specifier {
-    
-    public var rootSpecifier: RootSpecifier {
-        return parentQuery.rootSpecifier
+    public init(from decoder: Decoder) throws {
+        guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Can only decode a query from an AEDescriptor"))
+        }
+        switch descriptor.type {
+        case .objectSpecifier:
+            self = .objectSpecifier(try ObjectSpecifier(from: decoder))
+        case .insertionLoc:
+            self = .insertionSpecifier(try InsertionSpecifier(from: decoder))
+        default:
+            self = .rootSpecifier(try RootSpecifier(from: decoder))
+        }
     }
     
 }
-
-/// An insertion location specifier.
-public final class InsertionSpecifier: Specifier {
     
-    public var app: App
-
-    public let insertionLocation: AE4.InsertionLocation
-
-    private(set) public var parentQuery: Query
-
-    public init(insertionLocation: AE4.InsertionLocation, parentQuery: Query, app: App) {
-        self.insertionLocation = insertionLocation
-        self.parentQuery = parentQuery
-        self.app = app
-    }
+public struct ObjectSpecifier: Codable, AETyped {
     
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try .insertionSpecifier(container: parentQuery, location: insertionLocation, app: app)
-    }
-    
-}
-
-/// An object specifier.
-public protocol ObjectSpecifier: Specifier {
-    
-    var wantType: AE4.AEType { get }
-    var selectorForm: AE4.IndexForm { get }
-    var selectorData: AEEncodable { get }
-    
-}
-
-/// A property or single-element object specifier.
-public class SingleObjectSpecifier: Specifier, ObjectSpecifier {
-    
-    public var app: App
-    
-    // 'want', 'form', 'seld'
-    public let wantType: AE4.AEType
-    public let selectorForm: AE4.IndexForm
-    public let selectorData: AEEncodable
-    
-    private(set) public var parentQuery: Query
-
-    public required init(wantType: AE4.AEType, selectorForm: AE4.IndexForm, selectorData: AEEncodable, parentQuery: Query, app: App) {
+    public init(parent: Query, wantType: AE4.AEType, selectorForm: IndexForm) {
+        self.parent = parent
         self.wantType = wantType
         self.selectorForm = selectorForm
-        self.selectorData = selectorData
-        self.parentQuery = parentQuery
-        self.app = app
-    }
-
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try .objectSpecifier(container: parentQuery, type: wantType, form: selectorForm, data: selectorData, app: app)
-    }
-
-    public func beginsWith(_ value: AEEncodable) -> TestClause {
-        return ComparisonTest(operatorType: .beginsWith, operand1: self, operand2: value, app: app)
-    }
-
-    public func endsWith(_ value: AEEncodable) -> TestClause {
-        return ComparisonTest(operatorType: .endsWith, operand1: self, operand2: value, app: app)
-    }
-
-    public func contains(_ value: AEEncodable) -> TestClause {
-        return ComparisonTest(operatorType: .contains, operand1: self, operand2: value, app: app)
-    }
-
-    public func isIn(_ value: AEEncodable) -> TestClause {
-        return ComparisonTest(operatorType: .isIn, operand1: self, operand2: value, app: app)
     }
     
-}
-
-public func <(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .lessThan, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public func <=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .lessThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public func ==(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .equals, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public func !=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .notEquals, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public func >(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .greaterThan, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public func >=(lhs: SingleObjectSpecifier, rhs: AEEncodable) -> TestClause {
-    return ComparisonTest(operatorType: .greaterThanEquals, operand1: lhs, operand2: rhs, app: lhs.app)
-}
-
-public struct RangeSelector: AEEncodable { // holds data for by-range selectors
-    // Start and stop are Con-based (i.e. relative to container) specifiers (App-based specifiers will also work, as
-    // long as they have the same parent specifier as the by-range specifier itself). For convenience, users can also
-    // pass non-specifier values (typically Strings and Ints) to represent simple by-name and by-index specifiers of
-    // the same element class; these will be converted to specifiers automatically when encoded.
-    public let start: AEEncodable
-    public let stop: AEEncodable
-    public let wantType: AE4.AEType
-
-    public init(start: AEEncodable, stop: AEEncodable, wantType: AE4.AEType) {
-        self.start = start
-        self.stop = stop
-        self.wantType = wantType
-    }
-
-    private func encode(_ selectorData: AEEncodable, app: App) throws -> AEDescriptor {
-        switch selectorData {
-        case is AEDescriptor:
-            return selectorData as! AEDescriptor
-        case is Specifier: // technically, only SingleObjectSpecifier makes sense here, tho AS prob. doesn't prevent insertion loc or multi-element specifier being passed instead
-            return try (selectorData as! Specifier).encodeAEDescriptor(app)
-        default: // encode anything else as a by-name or by-index specifier
-            let selectorForm: AE4.IndexForm = selectorData is String ? .name : .absolutePosition
-            return try AEDescriptor.objectSpecifier(container: AEDescriptor.containerRoot, type: wantType, form: selectorForm, data: selectorData, app: app)
-        }
-    }
-
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try .range(start: start, stop: stop, app: app)
+    public var parent: Query
+    public var wantType: AE4.AEType
+    public var selectorForm: IndexForm
+    
+    public indirect enum IndexForm {
+        
+        case property(AE4.AEEnum)
+        case userProperty(String)
+        case name(String)
+        case id(Codable)
+        case index(Int)
+        case absolute(AE4.AbsoluteOrdinal)
+        case relative(AE4.RelativeOrdinal)
+        case range(RangeSelector)
+        case test(TestClause)
+        
     }
     
-    public init(from descriptor: AEDescriptor, wantType: AE4.AEType, app: App) throws {
-        guard descriptor.type == .rangeDescriptor else {
-            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Malformed selector in by-range specifier.")
-        }
-        guard
-            let startDesc = descriptor[AE4.RangeSpecifierKeywords.start],
-            let stopDesc = descriptor[AE4.RangeSpecifierKeywords.stop]
-        else {
-            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Malformed selector in by-range specifier.")
-        }
-        do {
-            self.init(start: try app.decode(startDesc), stop: try app.decode(stopDesc), wantType: wantType)
-        } catch {
-            throw DecodeError(descriptor: descriptor, type: RangeSelector.self, message: "Couldn't decode start/stop selector in by-range specifier.")
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(parent, forKey: .container)
+        try container.encode(wantType, forKey: .wantType)
+        switch selectorForm {
+        case let .property(property):
+            try container.encode(AE4.IndexForm.propertyID, forKey: .keyForm)
+            try container.encode(property, forKey: .keyData)
+        case let .userProperty(userProperty):
+            try container.encode(AE4.IndexForm.userPropertyID, forKey: .keyForm)
+            try container.encode(userProperty, forKey: .keyData)
+        case let .name(name):
+            try container.encode(AE4.IndexForm.name, forKey: .keyForm)
+            try container.encode(name, forKey: .keyData)
+        case let .id(id):
+            try container.encode(AE4.IndexForm.propertyID, forKey: .keyForm)
+            try id.encode(to: &container, forKey: .keyData)
+        case let .index(index):
+            try container.encode(AE4.IndexForm.absolutePosition, forKey: .keyForm)
+            try container.encode(index, forKey: .keyData)
+        case let .absolute(absolute):
+            try container.encode(AE4.IndexForm.absolutePosition, forKey: .keyForm)
+            try container.encode(absolute, forKey: .keyData)
+        case let .relative(relative):
+            try container.encode(AE4.IndexForm.relativePosition, forKey: .keyForm)
+            try container.encode(relative, forKey: .keyData)
+        case let .range(range):
+            try container.encode(AE4.IndexForm.range, forKey: .keyForm)
+            try container.encode(range, forKey: .keyData)
+        case let .test(test):
+            try container.encode(AE4.IndexForm.test, forKey: .keyForm)
+            try container.encode(test, forKey: .keyData)
         }
     }
     
-}
-
-/// A test clause. Must descend from a `RootSpecifier` with kind `.specimen`.
-public protocol TestClause: Query {
-}
-
-public func &&(lhs: TestClause, rhs: TestClause) -> TestClause {
-    return LogicalTest(operatorType: .and, operands: [lhs, rhs], app: lhs.app)
-}
-
-public func ||(lhs: TestClause, rhs: TestClause) -> TestClause {
-    return LogicalTest(operatorType: .or, operands: [lhs, rhs], app: lhs.app)
-}
-
-public prefix func !(op: TestClause) -> TestClause {
-    return LogicalTest(operatorType: .not, operands: [op], app: op.app)
-}
-
-/// A comparison or containment test clause.
-public class ComparisonTest: TestClause {
-    
-    public var app: App
-    
-    public let operatorType: AE4.Comparison, operand1: SingleObjectSpecifier, operand2: AEEncodable
-    
-    init(operatorType: AE4.Comparison, operand1: SingleObjectSpecifier, operand2: AEEncodable, app: App) {
-        self.operatorType = operatorType
-        self.operand1 = operand1
-        self.operand2 = operand2
-        self.app = app
-    }
-    
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        if operatorType == .notEquals {
-            return try (!(operand1 == operand2)).encodeAEDescriptor(app)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        parent = try container.decode(Query.self, forKey: .container)
+        wantType = try container.decode(AE4.AEType.self, forKey: .wantType)
+        switch try container.decode(AE4.IndexForm.self, forKey: .keyForm) {
+        case .propertyID:
+            selectorForm = .property(try container.decode(AE4.AEEnum.self, forKey: .keyData))
+        case .userPropertyID:
+            selectorForm = .userProperty(try container.decode(String.self, forKey: .keyData))
+        case .name:
+            selectorForm = .name(try container.decode(String.self, forKey: .keyData))
+        case .uniqueID:
+            guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Can only decode an id-based object specifier from an AEDescriptor"))
+            }
+            selectorForm = .id(descriptor[AE4.ObjectSpecifierKeywords.keyData])
+        case .absolutePosition:
+            if let absolute = try? container.decode(AE4.AbsoluteOrdinal.self, forKey: .keyData) {
+                selectorForm = .absolute(absolute)
+            } else {
+                selectorForm = .index(try container.decode(Int.self, forKey: .keyData))
+            }
+        case .relativePosition:
+            selectorForm = .relative(try container.decode(AE4.RelativeOrdinal.self, forKey: .keyData))
+        case .range:
+            selectorForm = .range(try container.decode(RangeSelector.self, forKey: .keyData))
+        case .test:
+            selectorForm = .test(try container.decode(TestClause.self, forKey: .keyData))
         }
-        if operatorType == .isIn {
-            return try .comparison(operator: .contains, lhs: operand2, rhs: operand1, app: app)
+    }
+    
+    public var aeType: AE4.AEType {
+        .objectSpecifier
+    }
+    
+    private enum CodingKeys: AE4, AE4CodingKey {
+        
+        case container = 0x66726f6d
+        case wantType = 0x77616e74
+        case keyForm = 0x666f726d
+        case keyData = 0x73656c64
+        
+        static var recordAEType: AE4.AEType {
+            .objectSpecifier
         }
-        return try .comparison(operator: operatorType, lhs: operand1, rhs: operand2, app: app)
+        
     }
     
-    public var parentQuery: Query {
-        return operand1
+    public struct RangeSelector: Codable, AETyped {
+        
+        // These can obviously be anything Codable when constructed manually,
+        // but when decoded from AEDescriptor, these will be AEDescriptors:
+        public let start: Codable
+        public let stop: Codable
+
+        public init(start: Codable, stop: Codable) {
+            self.start = start
+            self.stop = stop
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try start.encode(to: &container, forKey: .start)
+            try stop.encode(to: &container, forKey: .stop)
+        }
+        
+        public init(from decoder: Decoder) throws {
+            guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+                throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Can only decode a range selector from an AEDescriptor"))
+            }
+            guard
+                let start = descriptor[CodingKeys.start.rawValue],
+                let stop = descriptor[CodingKeys.stop.rawValue]
+            else {
+                throw DecodingError.valueNotFound(AEDescriptor.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Range selector requires both start and stop descriptors"))
+            }
+            self.init(start: start, stop: stop)
+        }
+        
+        public var aeType: AE4.AEType {
+            .rangeDescriptor
+        }
+        
+        private enum CodingKeys: AE4, AE4CodingKey {
+            
+            case start = 0x73746172
+            case stop = 0x73746f70
+            
+        }
+        
     }
     
-    public var rootSpecifier: RootSpecifier {
-        return operand1.rootSpecifier
+    public indirect enum TestClause: Codable, AETyped {
+        
+        case comparison(operator: AE4.Comparison, lhs: Codable, rhs: Codable)
+        case logicalBinary(operator: AE4.LogicalOperator, lhs: TestClause, rhs: TestClause)
+        case logicalUnary(operator: AE4.LogicalOperator, operand: TestClause)
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case let .comparison(`operator`, lhs, rhs):
+                try container.encode(`operator`, forKey: .comparisonOperator)
+                try lhs.encode(to: &container, forKey: .comparisonFirstObject)
+                try rhs.encode(to: &container, forKey: .comparisonSecondObject)
+            case let .logicalBinary(`operator`, lhs, rhs):
+                try container.encode(`operator`, forKey: .logicalOperator)
+                try container.encode([lhs, rhs], forKey: .logicalTerms)
+            case let .logicalUnary(`operator`, operand):
+                try container.encode(`operator`, forKey: .logicalOperator)
+                try container.encode([operand], forKey: .logicalTerms)
+            }
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if container.contains(.comparisonOperator) {
+                guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+                    throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Can only decode a test clause from an AEDescriptor"))
+                }
+                guard
+                    let lhs = descriptor[CodingKeys.comparisonFirstObject.rawValue],
+                    let rhs = descriptor[CodingKeys.comparisonSecondObject.rawValue]
+                else {
+                    throw DecodingError.valueNotFound(AEDescriptor.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Comparison test clause requres both operands"))
+                }
+                self = .comparison(
+                    operator: try container.decode(AE4.Comparison.self, forKey: .comparisonOperator),
+                    lhs: lhs,
+                    rhs: rhs
+                )
+            } else if container.contains(.logicalOperator) {
+                let `operator` = try container.decode(AE4.LogicalOperator.self, forKey: .logicalOperator)
+                let terms = try container.decode([AEDescriptor].self, forKey: .logicalTerms)
+                switch terms.count {
+                case 1:
+                    self = .logicalUnary(operator: `operator`, operand: try AEDecoder.decode(terms[0]))
+                case 2:
+                    self = .logicalBinary(operator: `operator`, lhs: try AEDecoder.decode(terms[0]), rhs: try AEDecoder.decode(terms[1]))
+                default:
+                    throw DecodingError.dataCorruptedError(forKey: .logicalTerms, in: container, debugDescription: "\(terms) has wrong number of logical terms")
+                }
+            } else {
+                throw DecodingError.typeMismatch(TestClause.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "\(container.allKeys) does not contain a test clause operator"))
+            }
+        }
+        
+        public var aeType: AE4.AEType {
+            switch self {
+            case .comparison:
+                return .compDescriptor
+            case .logicalBinary, .logicalUnary:
+                return .logicalDescriptor
+            }
+        }
+        
+        private enum CodingKeys: AE4, AE4CodingKey {
+            
+            case comparisonOperator = 0x72656c6f
+            case comparisonFirstObject = 0x6f626a31
+            case comparisonSecondObject = 0x6f626a32
+            
+            case logicalOperator = 0x6c6f6763
+            case logicalTerms = 0x7465726d
+            
+        }
+        
     }
     
 }
 
-/// A boolean operation test clause.
-public class LogicalTest: TestClause {
+public struct InsertionSpecifier: Codable, AETyped {
     
-    public var app: App
-
-    public let operatorType: AE4.LogicalOperator
-    public let operands: [TestClause] // note: this doesn't have a 'parent' as such; to walk chain, just use first operand
-
-    init(operatorType: AE4.LogicalOperator, operands: [TestClause], app: App) {
-        self.operatorType = operatorType
-        self.operands = operands
-        self.app = app
+    public var parent: Query
+    public var insertionLocation: AE4.InsertionLocation
+    
+    public init(parent: Query, insertionLocation: AE4.InsertionLocation) {
+        self.parent = parent
+        self.insertionLocation = insertionLocation
     }
     
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try .logical(operator: operatorType, operands: operands, app: app)
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try parent.encode(to: &container, forKey: .parent)
+        try insertionLocation.encode(to: &container, forKey: .insertionLocation)
     }
     
-    public var parentQuery: Query {
-        operands[0]
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            parent: try container.decode(Query.self, forKey: .parent),
+            insertionLocation: try container.decode(AE4.InsertionLocation.self, forKey: .insertionLocation)
+        )
     }
-    public var rootSpecifier: RootSpecifier {
-        operands[0].rootSpecifier
+    
+    private enum CodingKeys: AE4, AE4CodingKey {
+        
+        case parent = 0x6B6F626A
+        case insertionLocation = 0x6B706F73
+        
+    }
+    
+    public var aeType: AE4.AEType {
+        .insertionLoc
     }
     
 }
 
-/// The root of all specifier chains.
-public final class RootSpecifier: Specifier {
+public enum RootSpecifier: Codable, AETyped {
     
-    public var app: App
+    /// Root of all absolute object specifiers.
+    /// e.g., `document 1 of «application»`.
+    case application
+    /// Root of an object specifier specifying the start or end of a range of
+    /// elements in a by-range specifier.
+    /// e.g., `folders (folder 2 of «container») thru (folder -1 of «container»)`.
+    case container
+    /// Root of an object specifier specifying an element whose state is being
+    /// compared in a by-test specifier.
+    /// e.g., `every track where (rating of «specimen» > 50)`.
+    case specimen
+    /// Root of an object specifier that descends from a descriptor object.
+    /// e.g., `item 1 of {1,2,3}`.
+    /// (These sorts of descriptors are effectively exclusively generated
+    /// by AppleScript).
+    case object(AEDescriptor)
     
-    public enum Kind {
-        /// Root of all absolute object specifiers.
-        /// e.g., `document 1 of «application»`.
-        case application
-        /// Root of an object specifier specifying the start or end of a range of
-        /// elements in a by-range specifier.
-        /// e.g., `folders (folder 2 of «container») thru (folder -1 of «container»)`.
-        case container
-        /// Root of an object specifier specifying an element whose state is being
-        /// compared in a by-test specifier.
-        /// e.g., `every track where (rating of «specimen» > 50)`.
-        case specimen
-        /// Root of an object specifier that descends from a descriptor object.
-        /// e.g., `item 1 of {1,2,3}`.
-        /// (These sorts of descriptors are effectively exclusively generated
-        /// by AppleScript).
-        case object(AEDescriptor)
-    }
-    
-    public var kind: Kind
-    
-    public init(_ kind: Kind, app: App) {
-        self.kind = kind
-        self.app = app
-    }
-    
-    public var selectorData: AEEncodable {
-        switch kind {
-        case .application:
-            return AEDescriptor.appRoot
-        case .container:
-            return AEDescriptor.containerRoot
-        case .specimen:
-            return AEDescriptor.specimenRoot
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .application, .specimen, .container:
+            try container.encodeNil()
         case let .object(descriptor):
-            return descriptor
+            _ = descriptor
+            fatalError("unimplemented")
         }
+        // aeType will set our descriptor type if we are encoding to
+        // AEDescriptor.
     }
     
-    public var parentQuery: Query {
-        self
-    }
-    public var rootSpecifier: RootSpecifier {
-        self
-    }
-    
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-        try app.encode(selectorData)
-    }
-    
-    public convenience init(from descriptor: AEDescriptor, app: App) throws {
+    public init(from decoder: Decoder) throws {
+        guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+            self = .application
+            return
+        }
         switch descriptor.type {
         case .null:
-            self.init(.application, app: app)
+            self = .application
         case .currentContainer:
-            self.init(.container, app: app)
+            self = .container
         case .objectBeingExamined:
-            self.init(.specimen, app: app)
+            self = .specimen
         default:
-            self.init(.object(descriptor), app: app)
+            self = .object(descriptor)
+        }
+    }
+    
+    public var aeType: AE4.AEType {
+        switch self {
+        case .application:
+            return .null
+        case .container:
+            return .currentContainer
+        case .specimen:
+            return .objectBeingExamined
+        case let .object(object):
+            return object.type
         }
     }
     

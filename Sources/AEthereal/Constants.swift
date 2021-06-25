@@ -17,7 +17,7 @@ extension AE4 {
     public enum Enumerators {
     }
     
-    public enum IndexForm: AE4, CaseIterable, AEEncodable {
+    public enum IndexForm: AE4, CaseIterable, Codable, AETyped {
         
         case absolutePosition = 0x696E6478
         case name = 0x6E616D65
@@ -28,49 +28,31 @@ extension AE4 {
         case uniqueID = 0x49442020
         case userPropertyID = 0x75737270
         
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            AEDescriptor(enumCode: rawValue)
-        }
-        
     }
     
-    public enum LogicalOperator: AE4, CaseIterable, AEEncodable {
+    public enum LogicalOperator: AE4, CaseIterable, Codable, AETyped {
         
         case and = 0x414e4420
         case or = 0x4f522020
         case not = 0x4e4f5420
         
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            AEDescriptor(enumCode: rawValue)
-        }
-        
     }
     
-    public enum Comparison: AE4, CaseIterable, AEEncodable {
+    public enum Comparison: AE4, CaseIterable, Codable, AETyped {
         
         case lessThan = 0x3c202020
         case lessThanEquals = 0x3c3d2020
         case greaterThan = 0x3e202020
         case greaterThanEquals = 0x3e3d2020
         case equals = 0x3d202020
-        /// Encoded as `.equals` + `LogicalOperator.not`.
-        case notEquals = 0x00000001
         
         case contains = 0x636f6e74
-        /// Encoded as `.contains` with operands reversed.
-        case isIn = 0x00000002
         case beginsWith = 0x62677774
         case endsWith = 0x656e6473
         
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            precondition(self != .notEquals)
-            precondition(self != .isIn)
-            return AEDescriptor(enumCode: rawValue)
-        }
-        
     }
     
-    public enum AbsoluteOrdinal: AE4, CaseIterable, AEEncodable {
+    public enum AbsoluteOrdinal: AE4, CaseIterable, Codable, AETyped {
         
         case first = 0x66697273
         case last = 0x6c617374
@@ -78,33 +60,25 @@ extension AE4 {
         case random = 0x616e7920
         case all = 0x616c6c20
         
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            AEDescriptor(type: .absoluteOrdinal, code: rawValue)
+        public var aeType: AE4.AEType {
+            .absoluteOrdinal
         }
         
     }
     
-    public enum RelativeOrdinal: AE4, CaseIterable, AEEncodable {
+    public enum RelativeOrdinal: AE4, CaseIterable, Codable, AETyped {
         
         case next = 0x6e657874
         case previous = 0x70726576
         
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            AEDescriptor(enumCode: rawValue)
-        }
-        
     }
     
-    public enum InsertionLocation: AE4, CaseIterable, AEEncodable {
+    public enum InsertionLocation: AE4, CaseIterable, Codable, AETyped {
         
         case beginning = 0x62676E67
         case end = 0x656E6420
         case before = 0x6265666F
         case after = 0x61667465
-        
-        public func encodeAEDescriptor(_ app: App) -> AEDescriptor {
-            AEDescriptor(enumCode: rawValue)
-        }
         
     }
     
@@ -138,7 +112,23 @@ extension AE4 {
     public enum Keywords {
     }
     
-    public enum Attributes {
+    public enum Attribute: AE4, CaseIterable {
+        
+        case eventClass = 0x6576636C
+        case eventID = 0x65766964
+        case eventSource = 0x65737263
+        case interactLevel = 0x696E7465
+        case optionalKeyword = 0x6F70746B
+        case originalAddress = 0x66726F6D
+        case replyPort = 0x72657070
+        case replyRequested = 0x72657071
+        case returnID = 0x72746964
+        case subject = 0x7375626A
+        case timeout = 0x74696D6F
+        case transactionID = 0x7472616E
+        case considerations = 0x636F6E73
+        case considsAndIgnores = 0x63736967
+        
     }
     
     public enum Events {
@@ -159,7 +149,7 @@ extension AE4 {
     public enum ASProperties {
     }
     
-    public struct AEType: RawRepresentable, Hashable, AEEncodable {
+    public struct AEType: RawRepresentable, Hashable, Codable, AETyped {
         
         public typealias RawValue = AE4
         
@@ -169,8 +159,8 @@ extension AE4 {
         
         public var rawValue: AE4
         
-        public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
-            AEDescriptor(typeCode: rawValue)
+        public var aeType: AE4.AEType {
+            .type
         }
         
         public static let _128BitFloatingPoint = AEType(rawValue: 0x6C64626C)
@@ -212,7 +202,6 @@ extension AE4 {
         public static let cubicMeters = AEType(rawValue: 0x636D6574)
         public static let cubicYards = AEType(rawValue: 0x63797264)
         public static let currentContainer = AEType(rawValue: 0x63636E74)
-        public static let dashStyle = AEType(rawValue: 0x74646173)
         public static let data = AEType(rawValue: 0x74647461)
         public static let decimalStruct = AEType(rawValue: 0x6465636D)
         public static let degreesC = AEType(rawValue: 0x64656763)
@@ -260,8 +249,8 @@ extension AE4 {
         public static let machineLoc = AEType(rawValue: 0x6D4C6F63)
         public static let meters = AEType(rawValue: 0x6D657472)
         public static let miles = AEType(rawValue: 0x6D696C65)
+        public static let missingValue = AEType(rawValue: 0x6D736E67)
         public static let null = AEType(rawValue: 0x6E756C6C)
-        public static let osaDialectInfo = AEType(rawValue: 0x6469666F)
         public static let osaErrorRange = AEType(rawValue: 0x65726E67)
         public static let objectBeingExamined = AEType(rawValue: 0x65786D6E)
         public static let objectSpecifier = AEType(rawValue: 0x6F626A20)
@@ -319,14 +308,33 @@ extension AE4 {
         
     }
     
-    
+    public struct AEEnum: RawRepresentable, Hashable, Codable, AETyped {
+        
+        public typealias RawValue = AE4
+        
+        public init(rawValue: AE4) {
+            self.rawValue = rawValue
+        }
+        
+        public var rawValue: AE4
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            self.init(rawValue: try container.decode(AE4.self))
+        }
+        
+    }
     
 }
 
 extension AE4 {
     
     // Not defined in OpenScripting.h for some reason:
-
     static let inheritedProperties: AE4 = 0x6340235e // 'c@#^'
     
 }
@@ -541,7 +549,6 @@ extension AE4.TestPredicateKeywords {
     
     static let logicalOperator: AE4 = 0x6c6f6763
     static let logicalTerms: AE4 = 0x7465726d
-    static let object: AE4 = 0x6B6F626A
     
 }
 
@@ -608,7 +615,6 @@ extension AE4.AESymbols {
     static let cut: AE4 = 0x63757420
     static let deactivate: AE4 = 0x64616374
     static let delete: AE4 = 0x64656C6F
-    static let diskEvent: AE4 = 0x6469736B
     static let doObjectsExist: AE4 = 0x646F6578
     static let doScript: AE4 = 0x646F7363
     static let down: AE4 = 0x646F776E
@@ -624,7 +630,6 @@ extension AE4.AESymbols {
     static let getClassInfo: AE4 = 0x716F626A
     static let getData: AE4 = 0x67657464
     static let getDataSize: AE4 = 0x6473697A
-    static let getEventInfo: AE4 = 0x67746569
     static let getInfoSelection: AE4 = 0x73696E66
     static let getPrivilegeSelection: AE4 = 0x73707276
     static let greaterThan: AE4 = 0x3E202020
@@ -654,7 +659,6 @@ extension AE4.AESymbols {
     static let notifyRecording: AE4 = 0x72656372
     static let notifyStartRecording: AE4 = 0x72656331
     static let notifyStopRecording: AE4 = 0x72656330
-    static let nullEvent: AE4 = 0x6E756C6C
     static let `open`: AE4 = 0x6F646F63
     static let openContents: AE4 = 0x6F636F6E
     static let openDocuments: AE4 = 0x6F646F63
@@ -683,7 +687,6 @@ extension AE4.AESymbols {
     static let revealSelection: AE4 = 0x73726576
     static let revert: AE4 = 0x72767274
     static let save: AE4 = 0x73617665
-    static let scrapEvent: AE4 = 0x73637270
     static let scriptingSizeResource: AE4 = 0x7363737A
     static let select: AE4 = 0x736C6374
     static let setData: AE4 = 0x73657464
@@ -710,7 +713,6 @@ extension AE4.AESymbols {
     static let update: AE4 = 0x75706474
     static let userTerminology: AE4 = 0x61657574
     static let virtualKey: AE4 = 0x6B657963
-    static let wakeUpEvent: AE4 = 0x77616B65
     static let wholeWordEquals: AE4 = 0x77776571
     static let windowClass: AE4 = 0x77696E64
     static let yes: AE4 = 0x79657320
@@ -783,25 +785,6 @@ extension AE4.Keywords {
     
     /// "make" -> "at" parameter
     static let insertHere: AE4 = 0x696E7368
-    
-}
-
-extension AE4.Attributes {
-    
-    static let eventClass: AE4 = 0x6576636C
-    static let eventID: AE4 = 0x65766964
-    static let eventSource: AE4 = 0x65737263
-    static let interactLevel: AE4 = 0x696E7465
-    static let optionalKeyword: AE4 = 0x6F70746B
-    static let originalAddress: AE4 = 0x66726F6D
-    static let replyPort: AE4 = 0x72657070
-    static let replyRequested: AE4 = 0x72657071
-    static let returnID: AE4 = 0x72746964
-    static let subject: AE4 = 0x7375626A
-    static let timeout: AE4 = 0x74696D6F
-    static let transactionID: AE4 = 0x7472616E
-    static let considerations: AE4 = 0x636F6E73
-    static let considsAndIgnores: AE4 = 0x63736967
     
 }
 

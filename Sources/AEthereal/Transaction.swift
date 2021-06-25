@@ -3,14 +3,6 @@
 
 import Foundation
 
-extension RootSpecifier {
-    
-    public func withTransaction<T>(session: Any? = nil, do action: () throws -> T) throws -> T {
-        try app.withTransaction(session: session, do: action)
-    }
-    
-}
-
 // In practice, there are few, if any, currently available apps that support transactions, but it's included for completeness.
 extension App {
     
@@ -36,14 +28,14 @@ extension App {
         }
     }
     
-    private func beginTransaction(session: Any? = nil) throws -> AETransactionID {
-        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.begin, targetSpecifier: App.generic.application, directParameter: session as Any).int32()
+    private func beginTransaction() throws -> AETransactionID {
+        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.begin).int32Value
     }
     private func abortTransaction() throws {
-        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.terminated, targetSpecifier: App.generic.application)
+        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.terminated)
     }
     private func endTransaction() throws {
-        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.end, targetSpecifier: App.generic.application)
+        try self.sendAppleEvent(eventClass: AE4.Events.Transactions.eventClass, eventID: AE4.Events.Transactions.IDs.end)
     }
     
 }

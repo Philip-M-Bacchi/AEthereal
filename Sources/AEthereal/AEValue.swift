@@ -6,18 +6,11 @@ import CoreGraphics.CGGeometry
 /// A value which is representable as an AppleEvent descriptor.
 public indirect enum AEValue {
     
-    case descriptor(AEDescriptor)
-    
-    case rootSpecifier(RootSpecifier)
-    case objectSpecifier(SingleObjectSpecifier)
-    case insertionSpecifier(InsertionSpecifier)
-    
-    case range(RangeSelector)
-    case comparisonTest(ComparisonTest)
-    case logicalTest(LogicalTest)
+    case query(Query)
     
     case missingValue
-    case symbol(Symbol)
+    case type(AE4.AEType)
+    case `enum`(AE4.AEEnum)
     
     case bool(Bool)
     case int32(Int32)
@@ -27,35 +20,14 @@ public indirect enum AEValue {
     case string(String)
     case date(Date)
     
-    case list([AEValue])
-    case record([AE4 : AEValue])
+    case list([AEDescriptor])
+    case record([AE4 : AEDescriptor])
     
-    case fileURL(URL)
+    case fileURL(AEFileURL)
     
     case point(CGPoint)
     case rect(CGRect)
     case color(RGBColor)
-    
-    var query: Query? {
-        switch self {
-        case let .rootSpecifier(query as Query),
-             let .objectSpecifier(query as Query),
-             let .insertionSpecifier(query as Query):
-            return query
-        default:
-            return nil
-        }
-    }
-    
-    var testClause: TestClause? {
-        switch self {
-        case let .comparisonTest(testClause as TestClause),
-             let .logicalTest(testClause as TestClause):
-            return testClause
-        default:
-            return nil
-        }
-    }
     
     func int32() throws -> Int32 {
         try {
@@ -110,30 +82,13 @@ public indirect enum AEValue {
     
 }
 
-public struct RGBColor {
-    
-    public init(r: UInt16, g: UInt16, b: UInt16) {
-        self.r = r
-        self.g = g
-        self.b = b
-    }
-    
-    public var r, g, b: UInt16
-    
-}
-
 extension AEValue: CustomStringConvertible {
     
     public var description: String {
         switch self {
-        case let .descriptor(object as Any),
-             let .rootSpecifier(object as Any),
-             let .objectSpecifier(object as Any),
-             let .insertionSpecifier(object as Any),
-             let .range(object as Any),
-             let .comparisonTest(object as Any),
-             let .logicalTest(object as Any),
-             let .symbol(object as Any),
+        case let .query(object as Any),
+             let .type(object as Any),
+             let .enum(object as Any),
              let .bool(object as Any),
              let .int32(object as Any),
              let .int64(object as Any),
@@ -155,37 +110,87 @@ extension AEValue: CustomStringConvertible {
     
 }
 
-extension AEValue: AEEncodable {
+extension AEValue: Codable {
     
-    public func encodeAEDescriptor(_ app: App) throws -> AEDescriptor {
+    public func encode(to encoder: Encoder) throws {
         switch self {
-        case let .descriptor(descriptor):
-            return descriptor
-        case let .rootSpecifier(object as AEEncodable),
-             let .objectSpecifier(object as AEEncodable),
-             let .insertionSpecifier(object as AEEncodable),
-             let .range(object as AEEncodable),
-             let .comparisonTest(object as AEEncodable),
-             let .logicalTest(object as AEEncodable),
-             let .symbol(object as AEEncodable),
-             let .bool(object as AEEncodable),
-             let .int32(object as AEEncodable),
-             let .int64(object as AEEncodable),
-             let .uint64(object as AEEncodable),
-             let .double(object as AEEncodable),
-             let .string(object as AEEncodable),
-             let .date(object as AEEncodable),
-             let .fileURL(object as AEEncodable),
-             let .point(object as AEEncodable),
-             let .rect(object as AEEncodable),
-             let .color(object as AEEncodable):
-            return try object.encodeAEDescriptor(app)
-        case let .list(list):
-            return try list.encodeAEDescriptor(app)
-        case let .record(record):
-            return try record.encodeAEDescriptor(app)
+        case let .query(object as Encodable),
+             let .type(object as Encodable),
+             let .enum(object as Encodable),
+             let .bool(object as Encodable),
+             let .int32(object as Encodable),
+             let .int64(object as Encodable),
+             let .uint64(object as Encodable),
+             let .double(object as Encodable),
+             let .string(object as Encodable),
+             let .date(object as Encodable),
+             let .list(object as Encodable),
+             let .record(object as Encodable),
+             let .fileURL(object as Encodable),
+             let .point(object as Encodable),
+             let .rect(object as Encodable),
+             let .color(object as Encodable):
+            // Invoke special handling if needed
+            // (see also https://forums.swift.org/t/how-to-encode-objects-of-unknown-type/12253/5)
+            var container = encoder.singleValueContainer()
+            try object.encode(to: &container)
         case .missingValue:
-            return .missingValue
+            return try AEDescriptor.missingValue.encode(to: encoder)
+        }
+    }
+    
+    public init(from decoder: Decoder) throws {
+        guard let descriptor = decoder.userInfo[.descriptor] as? AEDescriptor else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Can only decode from an AEDescriptor"))
+        }
+        func container() throws -> SingleValueDecodingContainer {
+            try decoder.singleValueContainer()
+        }
+        switch descriptor.type {
+        case .null, .currentContainer, .objectBeingExamined, .objectSpecifier, .insertionLoc:
+            self = .query(try container().decode(Query.self))
+        
+        case .type:
+            self = .type(try container().decode(AE4.AEType.self))
+        case .enumerated, .property, .keyword, .absoluteOrdinal:
+            self = descriptor.isMissingValue ? .missingValue : .enum(try container().decode(AE4.AEEnum.self))
+        
+        case .true, .false, .boolean:
+            self = .bool(try container().decode(Bool.self))
+        case .sInt32, .sInt16:
+            self = .int32(try container().decode(Int32.self))
+        case .sInt64:
+            self = .int64(try container().decode(Int64.self))
+        case .uInt64, .uInt32, .uInt16:
+            self = .uint64(try container().decode(UInt64.self))
+        case ._128BitFloatingPoint, .ieee64BitFloatingPoint, .ieee32BitFloatingPoint:
+            self = .double(try container().decode(Double.self))
+        case .text, .intlText, .utf8Text, .utf16ExternalRepresentation, .styledText, .unicodeText, .version:
+            self = .string(try container().decode(String.self))
+        case .longDateTime:
+            self = .date(try container().decode(Date.self))
+            
+        case .list:
+            self = .list(try container().decode([AEDescriptor].self))
+        case .record:
+            self = .record(try [AE4 : AEDescriptor](aeRecordFrom: decoder))
+            
+        case .alias, .bookmarkData, .fileURL, .fsRef:
+            self = .fileURL(try container().decode(AEFileURL.self))
+            
+        case .qdPoint:
+            self = .point(try container().decode(CGPoint.self))
+        case .qdRectangle:
+            self = .rect(try container().decode(CGRect.self))
+        case .rgbColor:
+            self = .color(try container().decode(RGBColor.self))
+            
+        // note: while there are also several AEAddressDesc types used to identify applications, these are very rarely used as command results (e.g. the `choose application` OSAX) and there's little point decoding them anway as the only type they can automatically be mapped to is AEApplication, which has only minimal functionality anyway. Also unsupported are unit types as they only cover a handful of measurement types and in practice aren't really used for anything except measurement conversions in AppleScript.
+        default:
+            if descriptor.isRecordDescriptor {
+                self = .record(try [AE4 : AEDescriptor](aeRecordFrom: decoder))
+            }
+            throw DecodingError.typeMismatch(AEValue.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unknown type of AEDescriptor"))
         }
     }
     
