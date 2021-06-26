@@ -251,8 +251,8 @@ public class AEDecoder: Decoder {
         }
         
         func decode(_ type: UInt32.Type) throws -> UInt32 {
-            try descriptor.uint64Value.flatMap { UInt32(exactly: $0) }
-                ?? { throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "Actual value was \(descriptor)")) }()
+            descriptor.uint64Value.flatMap { UInt32(exactly: $0) } ??
+                UInt32(descriptor.typeCodeValue)
         }
         
         func decode(_ type: UInt64.Type) throws -> UInt64 {
