@@ -132,15 +132,4 @@ public class SendFailure: AutomationError {
         }
     }
     
-    public override var errorDescription: String? {
-        var string = "SendFailure \(self._code): \(self.message ?? "")"
-        if let expectedType = self.expectedType { string += "\n\n\tExpected type: \(expectedType)" }
-        if let offendingObject = self.offendingObject { string += "\n\n\tOffending object: \(offendingObject)" }
-        if let error = self.cause as? AutomationError {
-            string += "\n\n" + error.description(self._code, separator: "\n\n")
-        } else if let error = self.cause {
-            string += "\n\n\(error)"
-        }
-        return string
-    }
 }
