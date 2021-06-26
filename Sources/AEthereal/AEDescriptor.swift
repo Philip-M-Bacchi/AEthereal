@@ -21,7 +21,8 @@ public final class AEDescriptor: NSAppleEventDescriptor {
     }
     public convenience init(_ descriptor: NSAppleEventDescriptor) {
         var copy = AEDesc()
-        assert(AEDuplicateDesc(descriptor.aeDesc, &copy) == noErr)
+        let err = AEDuplicateDesc(descriptor.aeDesc, &copy)
+        assert(err == noErr)
         self.init(aeDescNoCopy: &copy)
     }
     
