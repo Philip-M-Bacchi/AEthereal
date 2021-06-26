@@ -118,15 +118,12 @@ extension AE4 {
         case eventID = 0x65766964
         case eventSource = 0x65737263
         case interactLevel = 0x696E7465
-        case optionalKeyword = 0x6F70746B
-        case originalAddress = 0x66726F6D
         case replyPort = 0x72657070
         case replyRequested = 0x72657071
         case returnID = 0x72746964
         case subject = 0x7375626A
         case timeout = 0x74696D6F
         case transactionID = 0x7472616E
-        case considerations = 0x636F6E73
         case considsAndIgnores = 0x63736967
         
     }
