@@ -138,7 +138,7 @@ public class AEEncoder: Encoder {
         
     }
     
-    private class SingleValueContainer: SingleValueEncodingContainer, AEDescriptorContainer {
+    fileprivate class SingleValueContainer: SingleValueEncodingContainer, AEDescriptorContainer {
         
         init(codingPath: [CodingKey]) {
             self.codingPath = codingPath
@@ -327,7 +327,10 @@ private func encode(_ value: Encodable, to encoder: Encoder) throws {
     // Also see the matching switch in AEDecoder.
     switch value {
     case let data as Data:
-        try AEDescriptor(type: .data, data: data).encode(to: encoder)
+        // AEDescriptor's Encodable implementation calls us and lands here.
+        // i.e., *don't call it back* lest you overflow the stack.
+        let container = encoder.singleValueContainer() as! AEEncoder.SingleValueContainer
+        container.descriptor = AEDescriptor(type: .data, data: data)
     case let date as Date:
         try AEDescriptor(date: date).encode(to: encoder)
     case let point as CGPoint:
