@@ -4,7 +4,7 @@
 import Foundation
 import CoreGraphics.CGGeometry
 
-public struct AEFileURL: Codable {
+public struct AEFileURL: Codable, AETyped, Hashable {
     
     public init(url: URL) {
         self.url = url
@@ -26,6 +26,10 @@ public struct AEFileURL: Codable {
             let container = try decoder.singleValueContainer()
             self.init(url: try container.decode(URL.self))
         }
+    }
+    
+    public var aeType: AE4.AEType {
+        .fileURL
     }
     
 }
