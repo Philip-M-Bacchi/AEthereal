@@ -54,7 +54,7 @@ public struct ObjectSpecifier: Codable, AETyped {
         case property(AE4.AEEnum)
         case userProperty(String)
         case name(String)
-        case id(Codable)
+        case id(Encodable)
         case index(Int)
         case absolute(AE4.AbsoluteOrdinal)
         case relative(AE4.RelativeOrdinal)
@@ -150,10 +150,10 @@ public struct ObjectSpecifier: Codable, AETyped {
         
         // These can obviously be anything Codable when constructed manually,
         // but when decoded from AEDescriptor, these will be AEDescriptors:
-        public let start: Codable
-        public let stop: Codable
+        public let start: Encodable
+        public let stop: Encodable
 
-        public init(start: Codable, stop: Codable) {
+        public init(start: Encodable, stop: Encodable) {
             self.start = start
             self.stop = stop
         }
@@ -192,7 +192,7 @@ public struct ObjectSpecifier: Codable, AETyped {
     
     public indirect enum TestClause: Codable, AETyped {
         
-        case comparison(operator: AE4.Comparison, lhs: Codable, rhs: Codable)
+        case comparison(operator: AE4.Comparison, lhs: Encodable, rhs: Encodable)
         case logicalBinary(operator: AE4.LogicalOperator, lhs: TestClause, rhs: TestClause)
         case logicalUnary(operator: AE4.LogicalOperator, operand: TestClause)
         
