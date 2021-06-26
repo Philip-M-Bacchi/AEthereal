@@ -64,25 +64,22 @@ extension App {
                 event[AE4.Keywords.directObject] = try AEEncoder.encode(direct)
             }
             
-            event[.subject] = try {
-                if case .rootSpecifier = targetQuery {
-                } else {
-                    if eventClass == AE4.Suites.coreSuite && eventID == AE4.AESymbols.createElement {
-                        if event[AE4.Keywords.insertHere] == nil {
-                            event[AE4.Keywords.insertHere] = try AEEncoder.encode(targetQuery)
-                        } else {
-                            return try AEEncoder.encode(targetQuery)
-                        }
+            if case .rootSpecifier = targetQuery {
+            } else {
+                if eventClass == AE4.Suites.coreSuite && eventID == AE4.AESymbols.createElement {
+                    if event[AE4.Keywords.insertHere] == nil {
+                        event[AE4.Keywords.insertHere] = try AEEncoder.encode(targetQuery)
                     } else {
-                        if parameters[AE4.Keywords.directObject] == nil {
-                            event[AE4.Keywords.directObject] = try AEEncoder.encode(targetQuery)
-                        } else {
-                            return try AEEncoder.encode(targetQuery)
-                        }
+                        event[.subject] = try AEEncoder.encode(targetQuery)
+                    }
+                } else {
+                    if parameters[AE4.Keywords.directObject] == nil {
+                        event[AE4.Keywords.directObject] = try AEEncoder.encode(targetQuery)
+                    } else {
+                        event[.subject] = try AEEncoder.encode(targetQuery)
                     }
                 }
-                return AEDescriptor.appRoot
-            }()
+            }
             
             if let type = requestedType {
                 event[AE4.Keywords.requestedType] = AEDescriptor(typeCode: type)
@@ -109,7 +106,9 @@ extension App {
                         }
                     }
                     for attribute in [AE4.Attribute.subject, AE4.Attribute.considsAndIgnores] {
-                        copiedEvent[attribute] = event[attribute]!
+                        if let value = event[attribute] {
+                            copiedEvent[attribute] = value
+                        }
                     }
                     sentEvent = copiedEvent
                     replyEvent = try copiedEvent.sendEvent(options: sendOptions, timeout: timeout)
