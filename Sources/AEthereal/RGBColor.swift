@@ -1,6 +1,6 @@
 // See README.md for licensing information.
 
-public struct RGBColor {
+public struct RGBColor: Hashable {
     
     public init(r: UInt16, g: UInt16, b: UInt16) {
         self.r = r
