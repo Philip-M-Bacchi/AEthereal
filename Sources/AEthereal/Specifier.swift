@@ -78,7 +78,7 @@ public struct ObjectSpecifier: Codable, AETyped {
             try container.encode(AE4.IndexForm.name, forKey: .keyForm)
             try container.encode(name, forKey: .keyData)
         case let .id(id):
-            try container.encode(AE4.IndexForm.propertyID, forKey: .keyForm)
+            try container.encode(AE4.IndexForm.uniqueID, forKey: .keyForm)
             try id.encode(to: &container, forKey: .keyData)
         case let .index(index):
             try container.encode(AE4.IndexForm.absolutePosition, forKey: .keyForm)
