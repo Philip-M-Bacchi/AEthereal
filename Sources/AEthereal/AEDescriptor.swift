@@ -1,6 +1,7 @@
 // See README.md for licensing information.
 
 import Foundation
+import CoreServices.AE
 
 public final class AEDescriptor: NSAppleEventDescriptor {
     
@@ -19,7 +20,9 @@ public final class AEDescriptor: NSAppleEventDescriptor {
         super.init(aeDescNoCopy: aeDesc)
     }
     public convenience init(_ descriptor: NSAppleEventDescriptor) {
-        self.init(aeDescNoCopy: (descriptor.copy() as! NSAppleEventDescriptor).aeDesc!)
+        var copy = AEDesc()
+        assert(AEDuplicateDesc(descriptor.aeDesc, &copy) == noErr)
+        self.init(aeDescNoCopy: &copy)
     }
     
     public override class func null() -> AEDescriptor {
