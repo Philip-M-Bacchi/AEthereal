@@ -151,9 +151,9 @@ extension AEValue: Codable {
             self = .query(try container().decode(Query.self))
         
         case .type:
-            self = .type(try container().decode(AE4.AEType.self))
+            self = descriptor.isMissingValue ? .missingValue : .type(try container().decode(AE4.AEType.self))
         case .enumerated, .property, .keyword, .absoluteOrdinal:
-            self = descriptor.isMissingValue ? .missingValue : .enum(try container().decode(AE4.AEEnum.self))
+            self = .enum(try container().decode(AE4.AEEnum.self))
         
         case .true, .false, .boolean:
             self = .bool(try container().decode(Bool.self))
