@@ -11,13 +11,14 @@ public indirect enum Query: Codable {
     case insertionSpecifier(InsertionSpecifier)
     
     public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
         switch self {
         case let .rootSpecifier(rootSpecifier):
-            try rootSpecifier.encode(to: encoder)
+            try container.encode(rootSpecifier)
         case let .objectSpecifier(objectSpecifier):
-            try objectSpecifier.encode(to: encoder)
+            try container.encode(objectSpecifier)
         case let .insertionSpecifier(insertionSpecifier):
-            try insertionSpecifier.encode(to: encoder)
+            try container.encode(insertionSpecifier)
         }
     }
     
