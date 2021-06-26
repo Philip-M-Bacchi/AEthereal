@@ -58,19 +58,6 @@ public class EncodeError: AutomationError {
     
 }
 
-public class DecodeError: AutomationError {
-    
-    let type: Any.Type
-    let descriptor: AEDescriptor
-    
-    public init(descriptor: AEDescriptor, type: Any.Type, message: String? = nil) {
-        self.descriptor = descriptor
-        self.type = type
-        super.init(code: errAECoercionFail, message: message ?? "Can't decode \(descriptor) as \(type)")
-    }
-    
-}
-
 public class WrongType: AutomationError {
     
     let decoded: AEValue
