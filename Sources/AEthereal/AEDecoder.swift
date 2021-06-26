@@ -305,5 +305,5 @@ private func decode<T: Decodable>(from decoder: Decoder) throws -> T? {
 
 // Pattern matching for above switch statement.
 private func ~=<T, U>(_ lhs: T.Type, _ rhs: U.Type) -> Bool {
-    T.self is U
+    T.self == U.self
 }
