@@ -8,22 +8,29 @@ let defaultErrorCode = 1
 // base class for all SwiftAutomation-raised errors (not including NSErrors raised by underlying Cocoa APIs)
 public class AutomationError: LocalizedError {
     
-    public let code: Int // the OSStatus if known, or generic error code if not
+    /// NOTE: This member MUST be named _code.
+    ///       There's apparently an obscure way to access an error code from
+    ///       *any* Error object by accessing a member named _code.
+    ///       This is hardly documented as far as I know, but it worked in
+    ///       the original library and might actually be a good design here,
+    ///       as it means we can expose the error code in a way consistent
+    ///       with how NSErrors would.
+    public var _code: Int
     public var message: String?
     public let cause: Error?
     
-    public init(code: Int = 1, message: String? = nil, cause: Error? = nil) {
-        self.code = code
+    public init(code: Int, message: String? = nil, cause: Error? = nil) {
+        self._code = code
         self.message = message
         self.cause = cause
     }
     
     func description(_ previousCode: Int, separator: String = " ") -> String {
         let msg = self.message ?? descriptionForError[self._code]
-        var string = "Error \(self.code)\(msg == nil ? "." : ": ")"
+        var string = "Error \(self._code)\(msg == nil ? "." : ": ")"
         if msg != nil { string += msg! }
         if let error = self.cause as? AutomationError {
-            string += "\(separator)\(error.description(self.code))"
+            string += "\(separator)\(error.description(self._code))"
         } else if let error = self.cause {
             string += "\(separator)\(error)"
         }
@@ -95,7 +102,7 @@ public class SendFailure: AutomationError {
         self.message =
             reply?[AE4.Keywords.errorString]?.stringValue ??
             reply?[AE4.OSAErrorKeywords.briefMessage]?.stringValue ??
-            descriptionForError[code]
+            descriptionForError[_code]
     }
     
     public var expectedType: AE4.AEType? {
@@ -126,11 +133,11 @@ public class SendFailure: AutomationError {
     }
     
     public override var errorDescription: String? {
-        var string = "SendFailure \(self.code): \(self.message ?? "")"
+        var string = "SendFailure \(self._code): \(self.message ?? "")"
         if let expectedType = self.expectedType { string += "\n\n\tExpected type: \(expectedType)" }
         if let offendingObject = self.offendingObject { string += "\n\n\tOffending object: \(offendingObject)" }
         if let error = self.cause as? AutomationError {
-            string += "\n\n" + error.description(self.code, separator: "\n\n")
+            string += "\n\n" + error.description(self._code, separator: "\n\n")
         } else if let error = self.cause {
             string += "\n\n\(error)"
         }

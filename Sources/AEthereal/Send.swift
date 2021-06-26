@@ -130,7 +130,7 @@ extension App {
             } else if sendOptions.contains(.queueReply) {
                 // get the return ID that will be used by the reply event so that client code's main loop can identify that reply event in its own event queue later on
                 guard let returnIDDesc = event[.returnID] else {
-                    throw AutomationError(message: "Can't get return ID.")
+                    throw AutomationError(code: 1, message: "Can't get return ID.")
                 }
                 return returnIDDesc
             }
