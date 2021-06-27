@@ -3,7 +3,7 @@
 // MARK: Chained object specifier construction
 public protocol ChainableSpecifier {
     
-    func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier
+    func byProperty(_ property: AE4.AEType) -> ObjectSpecifier
     func byUserProperty(_ userProperty: String) -> ObjectSpecifier
     func byIndex(_ wantType: AE4.AEType, _ index: Int) -> ObjectSpecifier
     func byAbsolute(_ wantType: AE4.AEType, _ absolute: AE4.AbsoluteOrdinal) -> ObjectSpecifier
@@ -18,7 +18,7 @@ public protocol ChainableSpecifier {
 
 extension ObjectSpecifier: ChainableSpecifier {
     
-    public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
+    public func byProperty(_ property: AE4.AEType) -> ObjectSpecifier {
         ObjectSpecifier(parent: .objectSpecifier(self), wantType: .property, selectorForm: .property(property))
     }
     public func byUserProperty(_ userProperty: String) -> ObjectSpecifier {
@@ -54,7 +54,7 @@ extension ObjectSpecifier: ChainableSpecifier {
 
 extension RootSpecifier: ChainableSpecifier {
     
-    public func byProperty(_ property: AE4.AEEnum) -> ObjectSpecifier {
+    public func byProperty(_ property: AE4.AEType) -> ObjectSpecifier {
         ObjectSpecifier(parent: .rootSpecifier(self), wantType: .property, selectorForm: .property(property))
     }
     public func byUserProperty(_ userProperty: String) -> ObjectSpecifier {

@@ -52,7 +52,7 @@ public struct ObjectSpecifier: Codable, AETyped {
     
     public indirect enum IndexForm {
         
-        case property(AE4.AEEnum)
+        case property(AE4.AEType)
         case userProperty(String)
         case name(String)
         case id(Encodable)
@@ -105,7 +105,7 @@ public struct ObjectSpecifier: Codable, AETyped {
         wantType = try container.decode(AE4.AEType.self, forKey: .wantType)
         switch try container.decode(AE4.IndexForm.self, forKey: .keyForm) {
         case .propertyID:
-            selectorForm = .property(try container.decode(AE4.AEEnum.self, forKey: .keyData))
+            selectorForm = .property(try container.decode(AE4.AEType.self, forKey: .keyData))
         case .userPropertyID:
             selectorForm = .userProperty(try container.decode(String.self, forKey: .keyData))
         case .name:
