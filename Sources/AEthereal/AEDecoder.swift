@@ -84,7 +84,7 @@ public class AEDecoder: Decoder {
         }
         
         func decode<T>(_ type: T.Type, forKey key: Key) throws -> T where T : Decodable {
-            let decoder = AEDecoder(codingPath: codingPath + [key], userInfo: decoder.userInfo, descriptor: try value(for: key))
+            let decoder = AEDecoder(codingPath: codingPath + [key], userInfo: self.decoder.userInfo, descriptor: try value(for: key))
             guard let decoded: T = try AEthereal.decode(from: decoder) else {
                 throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
             }
@@ -149,7 +149,7 @@ public class AEDecoder: Decoder {
         
         func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
             try withNext { descriptor in
-                let decoder = AEDecoder(decoder: decoder, descriptor: descriptor)
+                let decoder = AEDecoder(decoder: self.decoder, descriptor: descriptor)
                 guard let decoded: T = try AEthereal.decode(from: decoder) else {
                     throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
                 }
@@ -257,7 +257,7 @@ public class AEDecoder: Decoder {
         }
         
         func decode<T>(_ type: T.Type) throws -> T where T : Decodable {
-            let decoder = AEDecoder(decoder: decoder, descriptor: descriptor)
+            let decoder = AEDecoder(decoder: self.decoder, descriptor: descriptor)
             guard let decoded: T = try AEthereal.decode(from: decoder) else {
                 throw DecodingError.typeMismatch(type, DecodingError.Context(codingPath: codingPath, debugDescription: "\(descriptor) cannot be decoded as \(type)"))
             }
