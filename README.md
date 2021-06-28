@@ -15,4 +15,4 @@ hhas has released SwiftAutomation into the public domain. AEthereal uses a dual-
 You may choose one of the following license options:
 
 1. AEthereal is released into the public domain, with absolutely no warranty provided.
-2. AEthereal is released under the terms of the MIT License, a copy of which is provided in LICENSE.txt.
+2. AEthereal is released under the terms of the MIT License, a copy of which is provided in [LICENSE.txt](LICENSE.txt).
