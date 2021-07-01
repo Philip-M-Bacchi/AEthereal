@@ -124,7 +124,7 @@ public class AEDecoder: Decoder {
             descriptor.numberOfItems
         }
         var isAtEnd: Bool {
-            currentIndex + 1 == count
+            currentIndex == count
         }
         var currentIndex: Int = 0
         
