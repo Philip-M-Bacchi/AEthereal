@@ -124,14 +124,14 @@ public class AEDecoder: Decoder {
             descriptor.numberOfItems
         }
         var isAtEnd: Bool {
-            currentIndex == count
+            currentIndex + 1 == count
         }
-        var currentIndex: Int = 1
+        var currentIndex: Int = 0
         
         var descriptor: AEDescriptor
         
         private func withNext<Result>(do action: (AEDescriptor) throws -> (Result, shouldIncrement: Bool)) throws -> Result {
-            guard let next = descriptor.atIndex(currentIndex) else {
+            guard let next = descriptor.atIndex(currentIndex + 1) else {
                 throw DecodingError.valueNotFound(Any.self, DecodingError.Context(codingPath: codingPath, debugDescription: "No more values"))
             }
             let (result, shouldIncrement) = try action(next)
