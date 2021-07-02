@@ -45,7 +45,7 @@ Beginning at a `RootSpecifier`, chain calls to any of these methods to build que
 - `byProperty(_:)` — property object specifier
 - `byUserProperty(_:)` — AppleScript "user property" object specifier
 - `byIndex(_:_:)` — by-index object specifier
-- `byAbsolute(_:_:)` — absolute position (first, last, middle, random) object specifier
+- `byAbsolute(_:_:)` — absolute position (first, last, middle, random, all) object specifier
 - `byRelative(_:_:)` — relative position (before/previous, after/next) object specifier
 - `byName(_:_:)` — by-name object specifier
 - `byID(_:_:)` — by-ID object specifier
@@ -62,7 +62,7 @@ let nameOfEveryDocument =
 
 ### AppleEvent sending
 
-Create an `App` from an `AETarget` and call `sendAppleEvent` with a event class/ID pair and any of:
+Create an `App` from an `AETarget` and call `sendAppleEvent` with an event class/ID pair and any of:
 
 - a target `Query`
 - event parameters (dictionary from `AE4` to anything `Encodable`)
