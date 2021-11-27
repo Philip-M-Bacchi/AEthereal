@@ -67,11 +67,7 @@ extension App {
             if case .rootSpecifier = targetQuery {
             } else {
                 if eventClass == AE4.Suites.coreSuite && eventID == AE4.AESymbols.createElement {
-                    if event[AE4.Keywords.insertHere] == nil {
-                        event[AE4.Keywords.insertHere] = try AEEncoder.encode(targetQuery)
-                    } else {
-                        event[.subject] = try AEEncoder.encode(targetQuery)
-                    }
+                    event[.subject] = try AEEncoder.encode(targetQuery)
                 } else {
                     if parameters[AE4.Keywords.directObject] == nil {
                         event[AE4.Keywords.directObject] = try AEEncoder.encode(targetQuery)
