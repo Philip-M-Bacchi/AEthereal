@@ -12,7 +12,7 @@ AEthereal refers to 4-byte AppleEvent codes as "AE4 codes", with Swift type `AE4
 
 ### Descriptor encoding/decoding
 
-Converion between Swift objects and AppleEvent descriptors is done through the Swift `Codable` interface. Anything `Codable` can be sent in an AppleEvent and decoded from a reply. "Unkeyed containers" encode list descriptors; "keyed containers" encode record descriptors. To use custom record keys, use a `CodingKeys` enum with `AE4` raw type, and conform it to `AE4CodingKey`.
+Conversion between Swift objects and AppleEvent descriptors is done through the Swift `Codable` interface. Anything `Codable` can be sent in an AppleEvent and decoded from a reply. "Unkeyed containers" encode list descriptors; "keyed containers" encode record descriptors. To use custom record keys, use a `CodingKeys` enum with `AE4` raw type, and conform it to `AE4CodingKey`.
 
 ```swift
 private enum CodingKeys: AE4, AE4CodingKey {
@@ -74,7 +74,7 @@ If you need a transaction, use  `withTransaction`.
 
 ## Origin
 
-Parts of AEthereal come from from the "dynamic bridge" portion of hhas' SwiftAutomation framework.
+Parts of AEthereal come from the "dynamic bridge" portion of hhas' SwiftAutomation framework.
 
 ## License
 
