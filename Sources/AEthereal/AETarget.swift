@@ -1,7 +1,7 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-import AppKit
+import AppKit.NSWorkspace
 
 // AE errors indicating process unavailable // TO DO: finalize
 private let processNotFoundErrorNumbers: Set<Int> = [procNotFound, connectionInvalid, localOnlyErr]

@@ -1,7 +1,7 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-import AppKit
+import Foundation
 
 public final class App {
     

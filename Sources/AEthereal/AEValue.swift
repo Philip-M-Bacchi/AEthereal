@@ -1,7 +1,7 @@
 // See README.md for licensing information.
 
-import Foundation
 import CoreGraphics.CGGeometry
+import Foundation
 
 /// A value which is representable as an AppleEvent descriptor.
 public indirect enum AEValue {

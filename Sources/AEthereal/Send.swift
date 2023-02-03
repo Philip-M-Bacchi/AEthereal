@@ -1,8 +1,8 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-import Foundation
 import AppKit.NSWorkspace
+import Foundation
 
 public typealias LaunchOptions = NSWorkspace.LaunchOptions
 public typealias SendOptions = AEDescriptor.SendOptions

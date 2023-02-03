@@ -1,8 +1,8 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
+import AppKit.NSWorkspace
 import Foundation
-import AppKit
 
 /******************************************************************************/
 // KLUDGE: NSWorkspace provides a good method for launching apps by file URL, and a crap one for launching by bundle ID - unfortunately, only the latter can be used in sandboxed apps. This extension adds a launchApplication(withBundleIdentifier:options:configuration:)throws->NSRunningApplication method that has a good API and the least compromised behavior, insulating AETarget code from the crappiness that hides within. If/when Apple adds a real, robust version of this method to NSWorkspace <rdar://29159280>, this extension can (and should) go away.

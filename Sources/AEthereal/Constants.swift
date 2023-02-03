@@ -1,8 +1,8 @@
 //  Originally written by hhas.
 //  See README.md for licensing information.
 
-import Darwin.MacTypes
 import CoreServices.AE.AEDataModel
+import Darwin.MacTypes
 
 public typealias AE4 = OSType
 

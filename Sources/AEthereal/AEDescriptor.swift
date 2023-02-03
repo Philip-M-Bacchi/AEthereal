@@ -1,7 +1,7 @@
 // See README.md for licensing information.
 
-import Foundation
 import CoreServices.AE
+import Foundation
 
 public final class AEDescriptor: NSAppleEventDescriptor {
     
