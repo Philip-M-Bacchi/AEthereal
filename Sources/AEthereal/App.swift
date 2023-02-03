@@ -12,7 +12,7 @@ public final class App {
     }
     
     public let target: AETarget
-    
+
     var _targetDescriptor: AEDescriptor? = nil
     
     var _transactionID: AETransactionID = .any

@@ -19,6 +19,7 @@ public enum AETarget: CustomStringConvertible {
     case bundleIdentifier(String)
     case processIdentifier(pid_t)
     case descriptor(AEDescriptor) // AEAddressDesc
+    case appleScript(URL) // NSAppleScript with Bundle URL
     case none // used in untargeted App instances; sendAppleEvent() will raise ConnectionError if called
     
     public var description: String {
@@ -35,9 +36,12 @@ public enum AETarget: CustomStringConvertible {
             return "app with pid \(pid)"
         case .descriptor(let descriptor):
             return "app by descriptor \(descriptor)"
+        case .appleScript(let url):
+            return "AppleScript at \(url.absoluteString)"
         case .none:
             return "invalid app"
         }
+
     }
     
     // support functions
@@ -138,6 +142,8 @@ public enum AETarget: CustomStringConvertible {
             return NSRunningApplication(processIdentifier: pid) != nil
         case .descriptor(let addressDesc):
             return self.isRunning(processDescriptor: addressDesc)
+        case .appleScript(_):
+            return false
         case .none: // used in untargeted App instances; sendAppleEvent() will raise ConnectionError if called
             break
         }
@@ -165,6 +171,8 @@ public enum AETarget: CustomStringConvertible {
             return NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
         case .descriptor(let addressDesc):
             return bundleIdentifier(processDescriptor: addressDesc)
+        case .appleScript(let url):
+            return Bundle(url: url)?.bundleIdentifier
         case .none:
             return nil
         }
@@ -241,10 +249,13 @@ public enum AETarget: CustomStringConvertible {
             return AEDescriptor(processIdentifier: pid)
         case .descriptor(let desc):
             return desc
+        case .appleScript(let url):
+            throw ConnectionError(target: .appleScript(url), message: "Use executeEvent to get a descriptor for AppleScript \(url)")
         case .none:
             throw ConnectionError(target: .none, message: "Untargeted specifiers can't send Apple events.")
         }
     }
+
 }
 
 /// Retrieves a file URL to the app named `name` on this machine.

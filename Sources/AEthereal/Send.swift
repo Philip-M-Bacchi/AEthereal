@@ -135,10 +135,10 @@ extension App {
             throw SendFailure(app: self, event: sentEvent, reply: repliedEvent, cause: error)
         }
     }
-    
 }
 
-// MARK: Target encoding
+
+// MARK: -- Target encoding
 extension App {
     
     public func targetDescriptor() throws -> AEDescriptor? {
