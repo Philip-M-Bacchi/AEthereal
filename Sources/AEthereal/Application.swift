@@ -3,9 +3,9 @@
 
 import Foundation
 
-public final class App {
+public final class Application {
     
-    public static var generic = App()
+    public static var generic = Application()
     
     public init(target: AETarget = .none) {
         self.target = target

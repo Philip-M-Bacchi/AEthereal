@@ -4,7 +4,7 @@
 import Foundation
 
 // In practice, there are few, if any, currently available apps that support transactions, but it's included for completeness.
-extension App {
+extension Application {
     
     public func withTransaction<T>(session: Any? = nil, do action: () throws -> (T)) throws -> T {
         _transactionLock.lock()

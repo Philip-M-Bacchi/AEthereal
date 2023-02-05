@@ -80,11 +80,11 @@ public class WrongType: AutomationError {
 
 public class SendFailure: AutomationError {
     
-    let app: App
+    let app: Application
     let event: AEDescriptor? // non-nil if event was built and sent
     let reply: AEDescriptor? // non-nil if reply event was received
     
-    public init(app: App, event: AEDescriptor? = nil, reply: AEDescriptor? = nil, cause: Error? = nil) {
+    public init(app: Application, event: AEDescriptor? = nil, reply: AEDescriptor? = nil, cause: Error? = nil) {
         self.app = app
         self.event = event
         self.reply = reply

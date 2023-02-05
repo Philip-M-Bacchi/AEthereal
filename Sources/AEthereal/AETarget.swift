@@ -95,7 +95,7 @@ public enum AETarget: CustomStringConvertible {
     private func bundleIdentifier(processDescriptor: AEDescriptor) -> String? {
         let specifier = RootSpecifier.application.byProperty(AE4.AEType(rawValue: AE4.Properties.id))
         guard
-            let reply = try? App(target: .descriptor(processDescriptor)).sendAppleEvent(eventClass: AE4.Suites.coreSuite, eventID: AE4.AESymbols.getData, targetQuery: .objectSpecifier(specifier)),
+            let reply = try? Application(target: .descriptor(processDescriptor)).sendAppleEvent(eventClass: AE4.Suites.coreSuite, eventID: AE4.AESymbols.getData, targetQuery: .objectSpecifier(specifier)),
             let id = try? String(from: AEDecoder(descriptor: reply))
         else {
             return nil

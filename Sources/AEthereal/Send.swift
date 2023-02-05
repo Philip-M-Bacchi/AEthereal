@@ -28,7 +28,7 @@ private let limitedRelaunchEvents: [(AE4,AE4)] = [(AE4.Events.Core.eventClass, A
 
 public typealias KeywordParameters = [AE4 : Encodable]
 
-extension App {
+extension Application {
     
     /// Sends an AppleScript-compatible AppleEvent with the (many available)
     /// given options.
@@ -139,7 +139,7 @@ extension App {
 }
 
 // MARK: Target encoding
-extension App {
+extension Application {
     
     public func targetDescriptor() throws -> AEDescriptor? {
         if _targetDescriptor == nil {
